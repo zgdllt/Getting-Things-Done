@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parent.parent
 PAYLOAD = (
     "SKILL.md", "README.md", "LICENSE", "agents/openai.yaml",
     "references/analysis.schema.json", "references/extractor.md",
+    "references/clarification.schema.json", "references/clarification.md",
     "references/native-operations.md", "references/workbench.md", "references/verification.md",
     "scripts/gtd.py", "scripts/gtd_native.swift", "scripts/gtd_dashboard.py",
+    "scripts/gtd_models.py", "scripts/gtd_clarify.py",
     "scripts/gtd_notifications.py", "scripts/gtd_notify.swift", "scripts/install.py",
     "scripts/test_gtd.py", "scripts/test_workbench.py", "scripts/verify_workbench_browser.py",
     "web/index.html", "web/app.js", "web/style.css", "web/icon.svg",

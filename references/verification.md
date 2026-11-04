@@ -27,6 +27,16 @@ The release adds three isolated portability regressions (31 total tests): reloca
 
 The arm64 artifact has been built and run on Apple Silicon. macOS 14 is the explicit binary deployment target; runtime acceptance on an actual macOS 14 machine is not claimed by the local macOS 27 check. Intel builds can be made from source.
 
+## Model settings and immediate answer processing (source update)
+
+The source update passed 44 isolated Python tests, JavaScript syntax checking and the browser fixture. The fixture now checks the bottom-left Settings entry, model/effort persistence across reloads, the immediate saved/processing state, automatic candidate/reply updates, model-failure retry and Settings access on mobile. It uses a fake model and fake native bridge; no real system-list writes occur. The source installer includes both new Python modules and clarification prompt/schema.
+
+A separate synthetic smoke check made one real `gpt-6.1-terra / high` request through the existing Codex provider. Its answer job completed, generated an explanation and closed the explicitly finished synthetic candidate; the formal-operation journal stayed empty. This establishes that route at the check time, not service availability for every provider or model.
+
+A second real synthetic check used the installed asynchronous answer endpoint with the sparse `/usr/bin:/bin` PATH typical of a GUI login service. Saving returned before inference (about 5 ms in that local check), the detached worker located the user CLI, and its `gpt-6.1-terra / high` job completed with zero formal writes. The worker preserves the caller's PATH priority and adds the usual user/Homebrew CLI locations.
+
+The personal installed variant was merged separately to preserve its existing project-brief code and configuration, and passed its own 54 tests including those project-brief regressions. That private extension and its data are not part of the public source. v0.2.0 release assets remain the original tagged build.
+
 ## Explicit limits
 
 - Fixture writes prove state transitions and write receipts, not successful writes into every user's Apple account.

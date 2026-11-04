@@ -37,6 +37,14 @@ Observed activity is a clue. It does not automatically become a commitment, a de
 
 Notifications name the specific item and the question, and open the native app's clarification view. The app uses AppKit and the system WebKit engine. There is no bundled Chromium runtime, frontend framework, external font or CDN.
 
+## Settings and immediate replies
+
+In the current source version, **Settings** sits at the bottom left of the sidebar. It contains the model and reasoning selectors, background/notification status and system-app permission status. GTD defaults to **`gpt-6.1-terra` / `high`**. Choose from the local Codex model catalog or enter another model ID supported by your provider. Settings affect the next GTD model call and preserve your existing provider, login and ordinary Codex chat defaults.
+
+**Save answers and organize** first saves the answers, then immediately starts a separate model job. It does not wait for the history backlog. Each card shows progress, a reply and revised next action, or a focused follow-up question. A clearly finished/dropped local candidate can be closed; formal Reminders are never completed by model inference. Failed jobs keep their answers and offer retry. Older saved answers have an **Organize using answers** action as well.
+
+Each submitted answer batch can make an additional model call. Opening Settings, saving model preferences and browsing already-generated replies do not call a model. These source changes postdate the v0.2.0 download; use the source installation to obtain them.
+
 ## Requirements
 
 - macOS 14 or later. The prebuilt v0.2.0 app targets Apple Silicon (`arm64`).
@@ -107,7 +115,7 @@ To use it in Codex, invoke `$personal-gtd`, or say:
 
 ## Data and model use
 
-The workbench and SQLite store run locally. **Background extraction sends selected observed activity, existing candidates and system-list context to the model/provider configured in your Codex CLI.** Model use follows your own provider's data handling and billing. Credentials remain in your existing Codex configuration/credential store; this project does not copy them.
+The workbench and SQLite store run locally. **Background extraction sends selected observed activity, existing candidates and system-list context to your existing Codex CLI provider, using GTD's selected model and reasoning settings. Answer processing sends the relevant candidate, saved answers and source excerpts to that same provider.** Model use follows your own provider's data handling and billing. Credentials remain in your existing Codex configuration/credential store; this project does not copy them.
 
 Private runtime data lives at `~/.codex/personal-gtd/` (or under your `CODEX_HOME`). This includes the inbox database, history cursors, native snapshots, local access token, notification receipts and operation journals. These files are not project source and must stay out of Git.
 
@@ -171,6 +179,8 @@ SKILL.md, agents/              Codex skill entry
 scripts/gtd.py                 Evidence store, CLI, extraction and FSEvents subscriber
 scripts/gtd_native.swift       EventKit bridge and event-file watcher
 scripts/gtd_dashboard.py       Private loopback API and login service
+scripts/gtd_models.py          GTD model preferences and local catalog
+scripts/gtd_clarify.py         Durable immediate reply jobs, independent of history
 scripts/gtd_notify.swift       AppKit/WKWebView app and native notifications
 scripts/gtd_notifications.py   Native build and durable notification handoff
 web/                          Framework-free workbench

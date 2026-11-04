@@ -20,6 +20,8 @@ import uuid
 from zoneinfo import ZoneInfo
 
 import gtd
+import gtd_clarify
+import gtd_models
 
 LABEL = "local.codex.personal-gtd.workbench"
 WEB = gtd.SKILL / "web"
@@ -59,7 +61,18 @@ def dashboard_state(state):
             hook["alive"] = False
     except (ProcessLookupError, PermissionError):
         hook["alive"] = False
+    jobs = state.rows("SELECT * FROM answer_jobs ORDER BY created_at DESC,rowid DESC")
+    for job in jobs:
+        job["candidate_keys"] = json.loads(job["candidate_keys"])
+        job["question_keys"] = json.loads(job["question_keys"])
+        job.pop("fingerprint")
+        result = json.loads(job.pop("result") or "{}")
+        job["summary"] = result.get("summary", "")
+    resolutions = {row["candidate_key"]: row for row in state.rows("SELECT * FROM candidate_resolutions")}
+    for candidate in candidates:
+        candidate["resolution"] = resolutions.get(candidate["key"])
     return {"ok": True, "at": gtd.now(), "timezone": state.config().get("timezone", "Asia/Shanghai"),
+            "model_settings": gtd_models.selection(state), "answer_jobs": jobs,
             "snapshot": native,
             "snapshot_status": read_json(state.base / "snapshot-status.json", {"ok": False, "error": "尚未读取系统清单"}),
             "hook": hook,
@@ -89,7 +102,8 @@ def save_answers(state, items):
             if row["state"] != "open" and row["answer"] != answer:
                 raise ValueError("这条问题已在其他位置处理，请刷新查看")
             state.db.execute("UPDATE questions SET state='answered',answer=? WHERE key=?", (answer, key))
-    return {"ok": True, "saved": len(items)}
+        ident = gtd_clarify.enqueue(state, [item["key"].strip() for item in items])
+    return {"ok": True, "saved": len(items), "job_id": ident}
 
 
 def prepare(state, data):
@@ -108,6 +122,8 @@ def prepare(state, data):
         candidate = state.db.execute("SELECT * FROM candidates WHERE key=?", (key,)).fetchone()
         if not candidate or candidate["state"] != "inbox" or candidate["target_id"]:
             raise ValueError("事项已经处理，请刷新查看")
+        if gtd_clarify.pending_for(state, key):
+            raise ValueError("正在根据答复整理这条事项，请等结果更新后再确认")
         if state.db.execute("SELECT 1 FROM questions WHERE candidate_key=? AND state='open'", (key,)).fetchone():
             raise ValueError("请先答复这条事项的待澄清问题")
         list_id = nonempty(item, "list_id")
@@ -135,12 +151,17 @@ def action(state, route, data):
     if route == "/api/capture":
         return gtd.capture(state, nonempty(data, "text"))
     if route == "/api/answers":
-        return save_answers(state, data.get("items"))
+        result = save_answers(state, data.get("items"))
+        return gtd_clarify.launch(state, result)
+    if route == "/api/clarify":
+        return gtd_clarify.retry(state, job_id=nonempty(data, "job_id")) if data.get("job_id") else gtd_clarify.retry(state, nonempty(data, "candidate_key"))
+    if route == "/api/model":
+        return gtd_models.save(state, data.get("model"), data.get("reasoning_effort"), gtd.atomic_json)
     if route == "/api/dismiss":
         key = nonempty(data, "candidate_key")
         with state.lock("operations.lock"), state.db:
             row = state.db.execute("SELECT state FROM candidates WHERE key=?", (key,)).fetchone()
-            if not row or row["state"] not in ("inbox", "dismissed"):
+            if not row or row["state"] not in ("inbox", "resolved", "dismissed"):
                 raise ValueError("这条事项已进入正式清单，请在提醒事项中处理")
             state.db.execute("UPDATE candidates SET state='dismissed',updated_at=? WHERE key=?", (gtd.now(), key))
             state.db.execute("UPDATE questions SET state='answered',answer='用户忽略了此候选事项' WHERE candidate_key=? AND state='open'", (key,))
@@ -256,11 +277,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (WEB / path).read_bytes(), kind)
         if not self.authenticated():
             return self.send(401, {"error": "请从桌面「Getting Things Done」入口打开工作台"})
-        if route != "/api/state":
+        if route not in ("/api/state", "/api/models"):
             return self.send(404, {"error": "页面不存在"})
         state = gtd.State(self.server.base)
         try:
-            self.send(200, dashboard_state(state))
+            self.send(200, gtd_models.catalog(state) if route == "/api/models" else dashboard_state(state))
         finally:
             state.db.close()
 
@@ -391,6 +412,8 @@ def main():
         print(gtd.encode(install(state)))
         return
     conf = configuration(state.base)
+    if state.db.execute("SELECT 1 FROM answer_jobs WHERE state IN ('pending','processing')").fetchone():
+        gtd_clarify.start(state)
     state.db.close()
     with Server(("127.0.0.1", conf["port"]), args.state, conf["token"]) as server:
         server.serve_forever(poll_interval=0.5)

@@ -11,6 +11,7 @@ from unittest.mock import patch
 import uuid
 
 import gtd
+import gtd_clarify
 import gtd_dashboard as web
 
 
@@ -55,6 +56,10 @@ class WorkbenchTests(unittest.TestCase):
         self.question()
         with self.assertRaises(ValueError): self.prepare()
         web.save_answers(self.state,[{"key":"q","text":"推进"}])
+        with patch.object(gtd,"run_extractor",return_value={"summary":"已整理", "updates":[{
+                "candidate_key":self.key,"title":"明确下一步","bucket":"next","project":None,
+                "suggested_due":None,"disposition":"actionable","explanation":"先做这一步。","follow_up":None}]}):
+            gtd_clarify.process(self.state)
         plan=self.prepare()
         self.assertFalse(self.state.rows("SELECT * FROM operations"))
         with patch.object(gtd,"native",return_value={"ok":True,"item":{"id":"real-fixture-id"}}) as native, patch.object(gtd,"snapshot",return_value={}):

@@ -173,7 +173,7 @@ class GTDTests(unittest.TestCase):
             final={"summary":"fixture","candidates":[],"questions":[]}
             return subprocess.CompletedProcess(command,0,json.dumps({"type":"item.completed",
                 "item":{"type":"agent_message","text":json.dumps(final)}})+"\n","")
-        with patch.object(gtd,"extractor_command",return_value=["fake"]),patch.object(gtd.subprocess,"run",side_effect=result):
+        with patch.object(gtd,"extractor_command",return_value=["fake","--model","fixture-model"]),patch.object(gtd.subprocess,"run",side_effect=result):
             gtd.analyze(self.state,[])
         context=json.loads(observed["prompt"].split("OBSERVED_DATA_JSON:\n",1)[1])
         self.assertEqual(context["existing_calendar_events"][0]["id"],"calendar-fixture")
@@ -204,12 +204,12 @@ class GTDTests(unittest.TestCase):
         final={"type":"item.completed","item":{"type":"agent_message",
                "text":json.dumps({"summary":"fixture","candidates":[],"questions":[]})}}
         diagnostic={"type":"item.completed","item":{"type":"error","message":"synthetic warning"}}
-        with patch.object(gtd,"extractor_command",return_value=["fake"]), \
+        with patch.object(gtd,"extractor_command",return_value=["fake","--model","fixture-model"]), \
              patch.object(gtd.subprocess,"run",return_value=subprocess.CompletedProcess([],0,
                 json.dumps(diagnostic)+"\n"+json.dumps(final)+"\n","")):
             gtd.analyze(self.state,[])
         action={"type":"item.completed","item":{"type":"unexpected_file_read","id":"x"}}
-        with patch.object(gtd,"extractor_command",return_value=["fake"]), \
+        with patch.object(gtd,"extractor_command",return_value=["fake","--model","fixture-model"]), \
              patch.object(gtd.subprocess,"run",return_value=subprocess.CompletedProcess([],0,
                 json.dumps(action)+"\n"+json.dumps(final)+"\n","")):
             with self.assertRaises(RuntimeError):

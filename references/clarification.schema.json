@@ -1,0 +1,24 @@
+{
+  "type": "object", "additionalProperties": false,
+  "required": ["summary", "updates"],
+  "properties": {
+    "summary": {"type": "string"},
+    "updates": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["candidate_key", "title", "bucket", "project", "suggested_due", "disposition", "explanation", "follow_up"],
+        "properties": {
+          "candidate_key": {"type": "string"},
+          "title": {"type": "string"},
+          "bucket": {"type": "string", "enum": ["inbox", "next", "waiting", "someday", "project", "reference"]},
+          "project": {"type": ["string", "null"]},
+          "suggested_due": {"type": ["string", "null"]},
+          "disposition": {"type": "string", "enum": ["actionable", "resolved", "needs_clarification"]},
+          "explanation": {"type": "string"},
+          "follow_up": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

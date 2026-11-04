@@ -5,10 +5,13 @@ import json
 from pathlib import Path
 import tempfile
 import threading
+import time
 from unittest.mock import patch
 from playwright.sync_api import sync_playwright, expect
 
 import gtd
+import gtd_clarify
+import gtd_models
 import gtd_dashboard as web
 
 
@@ -26,7 +29,25 @@ def run(artifacts=None, browser_executable=None):
         gtd.atomic_json(base/"last-snapshot.json",native);gtd.atomic_json(base/"snapshot-status.json",{"ok":True})
         server=web.Server(("127.0.0.1",0),base,"fixture-token")
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
-        writes=[]
+        writes=[];workers=[];model_calls=[];fail_next=[False]
+        def fake_model(local,command,prompt,*args):
+            model_calls.append(gtd_models.selection(local))
+            time.sleep(1.1)
+            if fail_next[0]:
+                fail_next[0]=False
+                raise TimeoutError("合成模型服务暂时超时")
+            context=json.loads(prompt.split("INPUT_JSON:\n",1)[1])
+            return {"summary":"已把你的答复整理成具体下一步。", "updates":[{
+                "candidate_key":candidate["key"], "title":"完成第一版页面原型并核对主要交互" if candidate["key"]==key else "检查重试后的合成事项",
+                "bucket":"next", "project":candidate["project"], "suggested_due":None,
+                "disposition":"actionable", "explanation":"先完成页面原型，再按你的决定核对主要交互；保存答复后已自动更新下一步。", "follow_up":None
+            } for candidate in context["candidates"]]}
+        def start_worker(local):
+            def work():
+                worker=gtd.State(local.base)
+                try:gtd_clarify.process(worker)
+                finally:worker.db.close()
+            thread=threading.Thread(target=work);workers.append(thread);thread.start()
         def fake_native(_state,command,payload=None,**kwargs):
             if command=="snapshot":return json.loads(json.dumps(native))
             assert command=="apply"
@@ -41,7 +62,7 @@ def run(artifacts=None, browser_executable=None):
         artifacts=Path(artifacts or ".test-artifacts").resolve();artifacts.mkdir(parents=True,exist_ok=True)
         errors=[]
         try:
-            with patch.object(gtd,"native",side_effect=fake_native),sync_playwright() as p:
+            with patch.object(gtd,"native",side_effect=fake_native),patch.object(gtd,"run_extractor",side_effect=fake_model),patch.object(gtd,"extractor_command",return_value=["fake","--model","fixture"]),patch.object(gtd_clarify,"start",side_effect=start_worker),sync_playwright() as p:
                 launch={"headless":True}
                 if browser_executable:launch["executable_path"]=browser_executable
                 browser=p.chromium.launch(**launch)
@@ -51,6 +72,18 @@ def run(artifacts=None, browser_executable=None):
                 page.wait_for_load_state('networkidle');page.get_by_role('heading',name='今天，先做哪一件？').wait_for()
                 assert 'access=' not in page.url
                 page.screenshot(path=str(artifacts/'workbench-fixture-today.png'),full_page=True)
+                settings=page.locator('#app-settings')
+                assert settings.bounding_box()['x']<222
+                settings.click();page.get_by_role('heading',name='应用设置',exact=True).wait_for()
+                expect(page.locator('#model-choice')).to_have_value('gpt-6.1-terra')
+                expect(page.locator('#reasoning-choice')).to_have_value('high')
+                page.screenshot(path=str(artifacts/'workbench-fixture-settings.png'),full_page=True)
+                page.locator('#model-choice').select_option('__custom__');page.locator('#custom-model').fill('fixture-cheap-model')
+                page.locator('#reasoning-choice').select_option('medium');page.get_by_role('button',name='保存模型设置').click()
+                expect(page.locator('dialog')).not_to_be_visible()
+                page.reload();expect(page.locator('#settings-model-summary')).to_have_text('fixture-cheap-model · medium')
+                settings.click();page.locator('#model-choice').select_option('gpt-6.1-terra');page.locator('#reasoning-choice').select_option('high')
+                page.get_by_role('button',name='保存模型设置').click();expect(page.locator('dialog')).not_to_be_visible()
                 page.evaluate("location.hash='access=fixture-token&view=inbox'")
                 page.get_by_role('heading',name='先理清楚，再放进清单。').wait_for()
                 assert page.url.endswith('#inbox')
@@ -58,7 +91,14 @@ def run(artifacts=None, browser_executable=None):
                 page.locator('[data-answer=diagnostic]').fill('先完成页面原型，再核对主要交互。')
                 page.screenshot(path=str(artifacts/'workbench-fixture-clarify.png'),full_page=True)
                 page.locator('#save-answers').click()
-                expect(page.locator('[data-select]')).to_be_enabled()
+                page.get_by_text('答复已保存，正在整理',exact=True).wait_for()
+                expect(page.locator('[data-select]')).to_be_disabled()
+                page.screenshot(path=str(artifacts/'workbench-fixture-answer-pending.png'),full_page=True)
+                expect(page.locator('[data-select]')).to_be_enabled(timeout=10000)
+                page.get_by_role('heading',name='完成第一版页面原型并核对主要交互',exact=True).wait_for()
+                page.get_by_text('根据你的答复',exact=True).wait_for()
+                assert model_calls[-1]=={'model':'gpt-6.1-terra','reasoning_effort':'high'}
+                page.screenshot(path=str(artifacts/'workbench-fixture-answer-result.png'),full_page=True)
                 assert writes==[]
                 page.locator('[data-select]').check();page.locator('#prepare-selected').click()
                 page.locator('#destination').select_option('fixture-list')
@@ -80,12 +120,29 @@ def run(artifacts=None, browser_executable=None):
                 page.locator('nav [data-view=review]').click();page.locator('[data-check=calendar]').check()
                 page.locator('nav [data-view=inbox]').click();page.locator('nav [data-view=review]').click();assert page.locator('[data-check=calendar]').is_checked()
                 page.locator('#copy-review').click();assert '$personal-gtd' in page.evaluate('navigator.clipboard.readText()')
+                retry_key=gtd.capture(state,"合成服务失败重试验证")['candidate_key']
+                with state.db:
+                    state.db.execute("INSERT INTO questions VALUES(?,?,?,?,?,?,?)",('retry-question',retry_key,'这条合成事项是否推进？','open','',None,gtd.now()))
+                page.locator('nav [data-view=inbox]').click();page.reload()
+                page.locator('[data-answer=retry-question]').fill('推进，并检查实际结果。');fail_next[0]=True
+                page.locator('#save-answers').click()
+                page.get_by_role('button',name='重试整理',exact=True).wait_for(timeout=10000)
+                page.get_by_text('合成模型服务暂时超时',exact=True).wait_for()
+                page.get_by_role('button',name='重试整理',exact=True).click()
+                page.get_by_role('heading',name='检查重试后的合成事项',exact=True).wait_for(timeout=10000)
+                assert writes and len(writes)==2
                 page.set_viewport_size({"width":390,"height":844});page.screenshot(path=str(artifacts/'workbench-fixture-mobile.png'),full_page=True)
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                page.locator('#app-settings').click();page.get_by_role('heading',name='应用设置',exact=True).wait_for()
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+                page.get_by_role('button',name='关闭',exact=True).click()
                 assert not errors,errors
                 browser.close()
-            print(json.dumps({"ok":True,"flows":["session","today","clarify","preview-before-write","confirm-write","complete","capture","dismiss","projects","review","clipboard","mobile"],"native_test_writes":0,"fake_native_writes":len(writes),"browser_errors":errors,"artifacts":str(artifacts)},ensure_ascii=False))
-        finally:server.shutdown();server.server_close();thread.join();state.db.close()
+            print(json.dumps({"ok":True,"flows":["session","today","clarify","preview-before-write","confirm-write","complete","capture","dismiss","projects","review","clipboard","mobile","settings-menu","model-persistence","immediate-answer-response","model-failure-retry"],"native_test_writes":0,"fake_native_writes":len(writes),"browser_errors":errors,"artifacts":str(artifacts)},ensure_ascii=False))
+        finally:
+            server.shutdown();server.server_close();thread.join()
+            for worker in workers:worker.join(10)
+            state.db.close()
 
 
 if __name__=='__main__':

@@ -5,3 +5,12 @@
 /* Product name wraps intentionally within the compact navigation rail. */
 .brand{white-space:normal;gap:9px}.brand-title{display:block;font-size:16px;line-height:1.25;letter-spacing:-.4px}.brand small{font-size:6px;letter-spacing:.5px}
 @media(max-width:620px){.brand-title{font-size:13px;line-height:1.15}}
+
+.settings-button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:transparent;border:1px solid var(--line);border-radius:9px;padding:11px 9px;margin-bottom:23px;color:var(--ink);font-size:13px}.settings-button:hover{background:#e6ebdf}.settings-button>span:first-child{font-size:21px}.settings-button small{display:block;font:9px/1.8 var(--mono);color:var(--muted);overflow-wrap:anywhere}
+.settings-section-title{margin:24px 0 8px;font-size:14px}.settings-status{border-top:1px solid var(--line);margin-top:24px}.settings-status dl{font-size:12px}.settings-status dl>div{display:flex;justify-content:space-between;gap:16px;padding:7px 0}.settings-status dt{color:var(--muted)}.settings-status dd{margin:0;text-align:right}
+.agent-response{margin:18px 0;padding:17px 19px;border:1px solid #dbe6d0;border-radius:9px;background:var(--green-pale);font-size:13px;overflow-wrap:anywhere}
+.agent-response strong{font-size:12px;color:var(--green)}.agent-response p{margin:7px 0 0;white-space:pre-wrap}.agent-response small{display:block;color:var(--muted);font:10px var(--mono);margin-top:10px}
+.agent-response.pending{display:flex;align-items:flex-start;gap:12px}.agent-response.failed{background:var(--amber-pale);border-color:#ecdfc5}.agent-response.failed strong{color:var(--amber)}.agent-response.failed .button{margin-top:10px}
+.response-spinner{width:15px;height:15px;flex-shrink:0;border:2px solid #c7d9be;border-top-color:var(--green);border-radius:50%;animation:turn 1s linear infinite;margin-top:4px}
+.candidate-actions{flex-wrap:wrap;gap:10px}.candidate-actions .actions{flex-wrap:wrap}.model-note{margin-top:18px}#custom-model{width:100%}
+@media(max-width:620px){.sidebar-bottom{display:contents}.sidebar-bottom>.connection,.sidebar-bottom>p,.sidebar-bottom>.native-links{display:none}.settings-button{position:absolute;top:13px;right:17px;width:auto;margin:0;padding:5px 9px;gap:6px;font-size:11px}.settings-button>span:first-child{font-size:17px}.settings-button small{display:none}.inbox-footer .actions{flex-wrap:wrap}.agent-response{padding:14px}.filters{flex-wrap:wrap}}

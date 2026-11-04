@@ -23,6 +23,8 @@ import tomllib
 import uuid
 from zoneinfo import ZoneInfo
 
+import gtd_models
+
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
 VERSION = "0.2.0"
@@ -89,6 +91,11 @@ class State:
             op_id TEXT PRIMARY KEY, digest TEXT, state TEXT, receipt TEXT);
           CREATE TABLE IF NOT EXISTS notification_batches(
             id TEXT PRIMARY KEY, question_keys TEXT, title TEXT, body TEXT, state TEXT, created_at TEXT);
+          CREATE TABLE IF NOT EXISTS answer_jobs(
+            id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, question_keys TEXT, candidate_keys TEXT,
+            state TEXT, created_at TEXT, updated_at TEXT, result TEXT, error TEXT, model TEXT, reasoning_effort TEXT);
+          CREATE TABLE IF NOT EXISTS candidate_resolutions(
+            candidate_key TEXT PRIMARY KEY, job_id TEXT, disposition TEXT, explanation TEXT, updated_at TEXT);
         """)
         if "signature" not in {row["name"] for row in self.db.execute("PRAGMA table_info(cursors)")}:
             self.db.execute("ALTER TABLE cursors ADD COLUMN signature TEXT")
@@ -347,16 +354,35 @@ def ingest(state, batch_id, value, events):
     value = validate_analysis(value, events)
     lookup = {event["event_key"]: event for event in events}
     with state.lock("operations.lock", blocking=True), state.db:
+        versions = value.get("_candidate_versions", {})
+        suppressed = {row["key"] for row in state.rows("SELECT key,updated_at FROM candidates")
+                      if row["key"] in versions and row["updated_at"] != versions[row["key"]]}
         for item in value["candidates"]:
             evidence = [lookup[key] for key in item["event_keys"]]
             old = state.db.execute("SELECT * FROM candidates WHERE key=?", (item["key"],)).fetchone()
             merged = {entry["event_key"]: entry for entry in (json.loads(old["evidence"]) if old else []) + evidence}
-            if old and old["state"] != "inbox":
+            clarified = old and state.db.execute("SELECT updated_at FROM candidate_resolutions WHERE candidate_key=?", (item["key"],)).fetchone()
+            fresh = False
+            if clarified:
+                cutoff = dt.datetime.fromisoformat(clarified["updated_at"])
+                for source in evidence:
+                    try:
+                        observed = dt.datetime.fromisoformat(source.get("timestamp", "").replace("Z", "+00:00"))
+                        fresh = fresh or observed > cutoff
+                    except (ValueError, TypeError):
+                        pass
+            if old and (item["key"] in suppressed or (clarified and not fresh)):
+                # Late history cannot undo an answer or its freshly generated response.
+                suppressed.add(item["key"])
+                state.db.execute("UPDATE candidates SET evidence=? WHERE key=?",
+                                 (encode(list(merged.values())), item["key"]))
+                continue
+            if old and (old["state"] != "inbox" or clarified):
                 state.db.execute("UPDATE candidates SET evidence=?,updated_at=? WHERE key=?",
                                  (encode(list(merged.values())), now(), item["key"]))
                 changed = any((item.get(field) or "") != (old[field] or "")
                               for field in ("title", "bucket", "project", "suggested_due"))
-                if changed and old["state"] == "accepted":
+                if changed and (old["state"] == "accepted" or clarified):
                     changes = {field: {"before": old[field] or None, "after": item.get(field) or None}
                                for field in ("title", "bucket", "project", "suggested_due")
                                if (item.get(field) or "") != (old[field] or "")}
@@ -367,6 +393,8 @@ def ingest(state, batch_id, value, events):
                         (key, item["key"], "已有事项“" + old["title"] +
                          "”出现修改建议，需要调整吗？变更：" + encode(changes),
                          "open", "", None, now()))
+                    if old["state"] == "resolved":
+                        state.db.execute("UPDATE candidates SET state='inbox' WHERE key=?", (item["key"],))
                 continue
             state.db.execute("""INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?,?,?)
               ON CONFLICT(key) DO UPDATE SET
@@ -376,6 +404,8 @@ def ingest(state, batch_id, value, events):
                  item.get("suggested_due") or "", encode(list(merged.values())), "inbox", "", now(), now()))
         for item in value["questions"]:
             ref = item.get("candidate_key")
+            if ref in suppressed:
+                continue
             if ref and not state.db.execute("SELECT 1 FROM candidates WHERE key=?", (ref,)).fetchone():
                 raise ValueError("Question refers to a nonexistent candidate")
             state.db.execute("INSERT OR IGNORE INTO questions VALUES(?,?,?,?,?,?,?)",
@@ -385,7 +415,7 @@ def ingest(state, batch_id, value, events):
                          (value["summary"], batch_id))
 
 
-def extractor_command(state, config_home=None):
+def extractor_command(state, config_home=None, schema=None):
     binary = shutil.which("codex")
     if not binary:
         raise RuntimeError("Codex CLI not found")
@@ -394,7 +424,8 @@ def extractor_command(state, config_home=None):
     config_path = home / "config.toml"
     configuration = tomllib.loads(config_path.read_text()) if config_path.exists() else {}
     command = [binary, "exec", "--ephemeral", "--skip-git-repo-check", "--sandbox", "read-only",
-               "--color", "never", "--json", "--output-schema", str(SKILL / "references" / "analysis.schema.json")]
+               "--color", "never", "--json", "--output-schema", str(schema or SKILL / "references" / "analysis.schema.json")]
+    command += gtd_models.command_args(state)
     for feature in ("shell_tool", "unified_exec", "apps", "plugins", "computer_use", "browser_use",
                     "browser_use_external", "in_app_browser", "image_generation", "multi_agent",
                     "hooks", "memories", "chronicle", "view_image", "goals",
@@ -410,7 +441,7 @@ def extractor_command(state, config_home=None):
 
 
 def analyze(state, events):
-    current = state.rows("SELECT key,title,bucket,project,suggested_due,state,target_id FROM candidates")
+    current = state.rows("SELECT key,title,bucket,project,suggested_due,state,target_id,updated_at FROM candidates")
     questions = state.rows("SELECT key,candidate_key,question,state,answer FROM questions")
     native_path = state.base / "last-snapshot.json"
     system = json.loads(native_path.read_text()) if native_path.exists() else {}
@@ -429,6 +460,13 @@ def analyze(state, events):
     }
     prompt = (SKILL / "references" / "extractor.md").read_text() + "\n\nOBSERVED_DATA_JSON:\n" + encode(context)
     command = extractor_command(state)
+    value = run_extractor(state, command, prompt)
+    # An answer saved while history was being analyzed invalidates its old suggestions.
+    value["_candidate_versions"] = {item["key"]: item["updated_at"] for item in current}
+    return validate_analysis(value, events)
+
+
+def run_extractor(state, command, prompt, record="last-extractor.json"):
     started = time.time()
     environment = os.environ.copy()
     certificate = state.config().get("ca_certificate")
@@ -454,9 +492,10 @@ def analyze(state, events):
         raise RuntimeError("Codex extractor failed: " + result.stderr[-2000:])
     if action_items:
         raise RuntimeError("Extractor unexpectedly used tools; no output was ingested")
-    atomic_json(state.base / "last-extractor.json", {"finished_at": now(), "seconds": round(time.time()-started, 2),
+    atomic_json(state.base / record, {"finished_at": now(), "seconds": round(time.time()-started, 2),
+                "model": command[command.index("--model") + 1],
                 "action_items": len(action_items), "diagnostics": diagnostics})
-    return validate_analysis(json.loads(final), events)
+    return json.loads(final)
 
 
 def notify(state):
