@@ -18,6 +18,16 @@ def bundle(state):
 
 
 def build_bundle(state):
+    # A distributed app already contains the runtime and its native executable.
+    # Reuse it instead of rebuilding a second app on the destination machine.
+    if gtd.SKILL.parent.name == "Resources" and gtd.SKILL.parent.parent.name == "Contents":
+        hosted = gtd.SKILL.parent.parent.parent
+        if hosted.suffix == ".app" and (hosted / "Contents/MacOS/gtd-notify").is_file():
+            # Let the separately installed skill reuse this app without Xcode.
+            stamp = state.base / "runtime/gtd-notify.source.sha256"
+            stamp.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            stamp.write_text(hashlib.sha256((gtd.HERE / "gtd_notify.swift").read_bytes()).hexdigest())
+            return hosted
     source = gtd.HERE / "gtd_notify.swift"
     app = ((Path.home() / "Applications" / "Getting Things Done.app") if state.base == (Path.home() / ".codex/personal-gtd").resolve()
            else state.base / "runtime" / "Getting Things Done.app")
@@ -31,7 +41,7 @@ def build_bundle(state):
     info = {"CFBundleIdentifier": "local.codex.personal-gtd.notifications",
             "CFBundleName": "Getting Things Done", "CFBundleDisplayName": "Getting Things Done",
             "CFBundleExecutable": "gtd-notify", "CFBundlePackageType": "APPL",
-            "CFBundleVersion": "2", "CFBundleShortVersionString": "0.2.0", "LSUIElement": True,
+            "CFBundleVersion": "2", "CFBundleShortVersionString": gtd.VERSION, "LSUIElement": True,
             "CFBundleIconFile": "GTD", "NSHighResolutionCapable": True,
             "GTDStateRoot": str(state.base), "GTDPythonPath": gtd.stable_python(),
             "GTDServiceScript": str(gtd.HERE / "gtd_dashboard.py"),

@@ -64,3 +64,5 @@ jobs:
                   subprocess.run(['codesign', '--verify', '--deep', '--strict', str(bundle)], check=True)
               state.db.close()
           PY
+      - name: Build and audit a portable app archive
+        run: python scripts/package_release.py --app-only --output "$RUNNER_TEMP/gtd-release"

@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
+VERSION = "0.2.0"
 DEFAULT_STATE = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "personal-gtd"
 LABEL = "local.codex.personal-gtd.history-hook"
 BUCKETS = {"inbox", "next", "waiting", "someday", "project", "reference"}
@@ -120,12 +121,23 @@ def native_binary(state):
     override = os.environ.get("PERSONAL_GTD_NATIVE")
     if override:
         return Path(override).resolve()
+    with state.lock("native-build.lock", blocking=True):
+        return build_native_binary(state)
+
+
+def build_native_binary(state):
     source = HERE / "gtd_native.swift"
     bundle = state.base / "runtime" / "Personal GTD Bridge.app"
     binary = bundle / "Contents" / "MacOS" / "gtd-native"
     digest = hashlib.sha256(source.read_bytes()).hexdigest()
     stamp = bundle.parent / "gtd-native.source.sha256"
     if binary.exists() and stamp.exists() and stamp.read_text() == digest:
+        return binary
+    prebuilt = SKILL.parent / "Personal GTD Bridge.app"
+    if SKILL.parent.name == "Resources" and SKILL.parent.parent.name == "Contents" and (prebuilt / "Contents/MacOS/gtd-native").is_file():
+        shutil.copytree(prebuilt, bundle, dirs_exist_ok=True)
+        (bundle / "source.sha256").unlink(missing_ok=True)
+        stamp.write_text(digest)
         return binary
     binary.parent.mkdir(parents=True, exist_ok=True)
     (bundle / "source.sha256").unlink(missing_ok=True)
@@ -725,7 +737,7 @@ def install_hook(state, root):
     plist.parent.mkdir(parents=True, exist_ok=True)
     python = stable_python()
     agent = {
-        "Label": LABEL, "ProgramArguments": [python, str(Path(__file__).resolve()), "--state", str(state.base), "daemon"],
+        "Label": LABEL, "ProgramArguments": [python, "-B", str(Path(__file__).resolve()), "--state", str(state.base), "daemon"],
         "RunAtLoad": True, "KeepAlive": {"SuccessfulExit": False}, "ThrottleInterval": 30,
         "WorkingDirectory": str(state.base), "StandardOutPath": str(state.base / "hook.stdout.log"),
         "StandardErrorPath": str(state.base / "hook.stderr.log"),
