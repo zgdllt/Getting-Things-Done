@@ -17,6 +17,7 @@ __pycache__/
 .test-artifacts/
 test-results/
 playwright-report/
+dist/
 runtime/
 personal-gtd/
 workbench-plans/

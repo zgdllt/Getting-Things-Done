@@ -1,10 +1,16 @@
-# Getting Things Done
+<p align="center">
+  <img src="docs/images/app-icon.png" alt="Getting Things Done app icon" width="128" height="128">
+</p>
+
+<h1 align="center">Getting Things Done</h1>
 
 A personal GTD companion for macOS: turn activity clues into a small clarification queue, then decide what belongs in your actual task list.
 
 **Native WKWebView app · Codex skill · Apple Reminders & Calendar · Computer History**
 
-The interface is currently in Chinese. This is an early preview built for local use, with source-based installation.
+The interface is currently in Chinese. This is an early preview built for local use.
+
+**[Download v0.2.0](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.2.0)** · [Build from source](#install-from-source)
 
 ![Getting Things Done workbench, showing synthetic example data](docs/images/workbench.png)
 
@@ -33,15 +39,31 @@ Notifications name the specific item and the question, and open the native app's
 
 ## Requirements
 
-- macOS 14 or later, with Xcode Command Line Tools (`xcode-select --install`).
+- macOS 14 or later. The prebuilt v0.2.0 app targets Apple Silicon (`arm64`).
 - Python 3.11 or later. A stable Homebrew Python path works with login agents.
 - Codex CLI, authenticated with your chosen model/provider, for background extraction and conversational GTD.
 - The **Computer History** plugin, enabled by you, for automatic activity-based capture. Manual capture and the workbench can be used without its event stream.
 - Calendar, Reminders and notification permissions are granted through macOS when you choose to enable them.
 
-The first native build happens locally with `swiftc`. The app is ad-hoc signed for local use; this repository does not ship a notarized installer.
+Xcode Command Line Tools (`xcode-select --install`) are needed only when building from source. The prebuilt app includes the native EventKit bridge and uses the Python installed on your Mac. It is ad-hoc signed, not notarized.
 
 ## Install and open
+
+### Download the app
+
+1. Download `Getting-Things-Done-v0.2.0-macos-arm64.zip` from the [release](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.2.0).
+2. Unzip and move `Getting Things Done.app` into `~/Applications` **before the first launch**.
+3. Open the app. Python 3.11+ must be installed; a Homebrew installation is detected automatically. If macOS blocks the ad-hoc-signed app, use the normal **System Settings → Privacy & Security → Open Anyway** approval for this downloaded app.
+
+The download contains no personal state or machine-specific paths. Open the app once to initialize its bundled bridge. For the conversational Codex skill, then install its bundled source:
+
+```bash
+python3 -B "$HOME/Applications/Getting Things Done.app/Contents/Resources/skill/scripts/install.py"
+```
+
+Existing skill installations require `--update`. The source package is also included in the release, alongside `SHA256SUMS` for both archives. Intel Macs can use the source installation below.
+
+### Install from source
 
 ```bash
 git clone https://github.com/zgdllt/Getting-Things-Done.git
@@ -122,6 +144,20 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m playwright install chromium
 .venv/bin/python scripts/verify_workbench_browser.py --artifacts .test-artifacts
+```
+
+Build release archives from a clean committed checkout on macOS:
+
+```bash
+python3 scripts/package_release.py --output dist
+```
+
+This produces an architecture-labelled app archive, a matching source archive and `SHA256SUMS`. Both native executables explicitly target macOS 14. The packaged app resolves its resources after moving, includes a prebuilt bridge and runs Python with bytecode writes disabled to preserve its signature. For an uncommitted development app, add `--app-only`.
+
+On a logged-in macOS desktop, verify a moved archive with synthetic data and then recheck its unchanged signature:
+
+```bash
+python3 scripts/verify_packaged_app.py dist/Getting-Things-Done-v0.2.0-macos-arm64.zip
 ```
 
 You can select an installed browser with `--browser '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'`. The browser fixture uses synthetic state and a fake native bridge; it never writes a test task into your real lists.

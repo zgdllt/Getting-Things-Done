@@ -93,6 +93,7 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
             window.backgroundColor = NSColor(calibratedRed: 0.97, green: 0.975, blue: 0.955, alpha: 1)
             window.center()
             let settings = WKWebViewConfiguration()
+            if verifyDirectory != nil { settings.websiteDataStore = .nonPersistent() }
             settings.userContentController.add(self, name: "gtdClipboard")
             let web = WKWebView(frame: .zero, configuration: settings)
             web.navigationDelegate = self; web.uiDelegate = self
@@ -116,11 +117,21 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
         }
         guard !startingService else { return }
         startingService = true
-        let python = Bundle.main.object(forInfoDictionaryKey: "GTDPythonPath") as? String ?? "/opt/homebrew/bin/python3"
-        let script = Bundle.main.object(forInfoDictionaryKey: "GTDServiceScript") as? String ?? ""
+        let bundled = Bundle.main.resourceURL?.appendingPathComponent("skill/scripts/gtd_dashboard.py")
+        let script = bundled.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0.path : nil }
+            ?? (Bundle.main.object(forInfoDictionaryKey: "GTDServiceScript") as? String ?? "")
         DispatchQueue.global(qos: .userInitiated).async {
+            guard let python = self.pythonExecutable() else {
+                DispatchQueue.main.async {
+                    self.startingService = false
+                    let alert = NSAlert(); alert.messageText = "需要 Python 3.11 或更高版本"
+                    alert.informativeText = "请先安装受支持的 Python（例如通过 Homebrew 安装 python），然后重新打开 Getting Things Done。"
+                    alert.addButton(withTitle: "知道了"); alert.runModal()
+                }
+                return
+            }
             let process = Process(); process.executableURL = URL(fileURLWithPath: python)
-            process.arguments = [script, "--state", self.root.path, "ensure"]
+            process.arguments = ["-B", script, "--state", self.root.path, "ensure"]
             process.standardOutput = FileHandle.nullDevice; process.standardError = FileHandle.nullDevice
             var success = false
             do { try process.run(); process.waitUntilExit(); success = process.terminationStatus == 0 } catch {}
@@ -141,6 +152,21 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
                 }
             }
         }
+    }
+
+    func pythonExecutable() -> String? {
+        var candidates: [String] = []
+        if let configured = Bundle.main.object(forInfoDictionaryKey: "GTDPythonPath") as? String { candidates.append(configured) }
+        candidates += ["/opt/homebrew/bin/python3", "/usr/local/bin/python3", "/Library/Frameworks/Python.framework/Versions/Current/bin/python3"]
+        candidates += (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map { String($0) + "/python3" }
+        var seen = Set<String>()
+        for candidate in candidates where seen.insert(candidate).inserted && FileManager.default.isExecutableFile(atPath: candidate) {
+            let check = Process(); check.executableURL = URL(fileURLWithPath: candidate)
+            check.arguments = ["-c", "import sys; raise SystemExit(sys.version_info < (3, 11))"]
+            check.standardOutput = FileHandle.nullDevice; check.standardError = FileHandle.nullDevice
+            do { try check.run(); check.waitUntilExit(); if check.terminationStatus == 0 { return candidate } } catch {}
+        }
+        return nil
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(); return true }

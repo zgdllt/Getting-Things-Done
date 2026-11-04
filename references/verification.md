@@ -19,6 +19,14 @@ Those local checks used macOS 27.2 and Codex CLI 0.166.0. They do not establish 
 
 Before the initial public push, the public source separately passed all 28 unit tests, the browser fixture with generic demonstration content, both native builds with strict signature checks, and temporary-directory install/update checks. Existing installs are refused without `--update`; unrelated files survive an update. No live system-list access, real task write or model extraction was needed for those release checks.
 
+## v0.2.0 downloadable app
+
+Release packaging uses only the source installation manifest, a generated app icon and compiled native components. Both Mach-O executables target macOS 14 and are checked for the labelled architecture. The app's Info.plist contains no author-specific Python, source or state path. Runtime helpers are copied to private state; the signed app is never a writable state directory.
+
+The release adds three isolated portability regressions (31 total tests): relocated app reuse, use of the precompiled bridge without Xcode or source mutation, and reuse by the separately installed Codex skill. On a logged-in macOS desktop, `verify_packaged_app.py` extracts to a different directory containing spaces, opens the actual app with synthetic state, confirms its authenticated native view and prebuilt bridge, and rechecks byte-for-byte bundle identity plus strict code signing after startup. It does not request Calendar/Reminders permissions or write real tasks.
+
+The arm64 artifact has been built and run on Apple Silicon. macOS 14 is the explicit binary deployment target; runtime acceptance on an actual macOS 14 machine is not claimed by the local macOS 27 check. Intel builds can be made from source.
+
 ## Explicit limits
 
 - Fixture writes prove state transitions and write receipts, not successful writes into every user's Apple account.

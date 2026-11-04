@@ -326,7 +326,7 @@ def install(state):
     target = f"gui/{os.getuid()}"
     plist = Path.home() / "Library/LaunchAgents" / (LABEL + ".plist")
     plist.parent.mkdir(parents=True, exist_ok=True)
-    entry = {"Label": LABEL, "ProgramArguments": [gtd.stable_python(), str(Path(__file__).resolve()),
+    entry = {"Label": LABEL, "ProgramArguments": [gtd.stable_python(), "-B", str(Path(__file__).resolve()),
              "--state", str(state.base), "serve"], "RunAtLoad": True,
              "KeepAlive": {"SuccessfulExit": False}, "ThrottleInterval": 10,
              "WorkingDirectory": str(state.base), "StandardOutPath": str(state.base / "workbench.stdout.log"),
@@ -372,6 +372,13 @@ def main():
     args = parser.parse_args()
     state = gtd.State(args.state)
     if args.command == "ensure":
+        # Provision the signed, bundled bridge without launching it or prompting.
+        # The separately installed Codex skill can then reuse this private cache.
+        prebuilt = gtd.SKILL.parent / "Personal GTD Bridge.app/Contents/MacOS/gtd-native"
+        if gtd.SKILL.parent.name == "Resources" and prebuilt.is_file():
+            gtd.native_binary(state)
+            from gtd_notifications import bundle
+            bundle(state)
         conf = configuration(state.base)
         try:
             with socket.create_connection(("127.0.0.1", conf["port"]), timeout=1):
