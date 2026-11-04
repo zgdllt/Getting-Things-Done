@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "candidates", "questions"],
+  "properties": {
+    "summary": {"type": "string"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "title", "bucket", "project", "suggested_due", "event_keys"],
+        "properties": {
+          "key": {"type": "string"},
+          "title": {"type": "string"},
+          "bucket": {"type": "string", "enum": ["inbox", "next", "waiting", "someday", "project", "reference"]},
+          "project": {"type": ["string", "null"]},
+          "suggested_due": {"type": ["string", "null"]},
+          "event_keys": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "candidate_key", "question"],
+        "properties": {
+          "key": {"type": "string"},
+          "candidate_key": {"type": ["string", "null"]},
+          "question": {"type": "string"}
+        }
+      }
+    }
+  }
+}

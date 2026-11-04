@@ -1,0 +1,4 @@
+interface:
+  display_name: "Getting Things Done"
+  short_description: "在 Codex 与Getting Things Done app 中结合活动线索、提醒事项和日历完成收集、澄清与回顾"
+  default_prompt: "用 $personal-gtd 整理待办线索，读取提醒事项与日历，并带我集中澄清下一步行动。"

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Getting Things Done · 留一点心力给当下</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#today"><img src="/icon.svg" width="36" height="36" alt=""><span><span class="brand-title">Getting Things<br>Done</span><small>A LITTLE ROOM TO THINK</small></span></a>
+    <p class="nav-label">你的工作台</p>
+    <nav aria-label="主导航">
+      <button data-view="today" aria-current="page"><span class="nav-symbol">◷</span>今天</button>
+      <button data-view="inbox"><span class="nav-symbol">▤</span>待澄清<span id="inbox-count" class="badge">—</span></button>
+      <button data-view="projects"><span class="nav-symbol">◈</span>项目与等待</button>
+      <button data-view="review"><span class="nav-symbol">↺</span>回顾</button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div id="hook-status" class="connection"><i></i><span>正在连接</span></div>
+      <p>线索留在这里。<br>正式任务在提醒事项，<br>时间安排在日历。</p>
+      <div class="native-links"><button data-open="reminders">打开提醒事项 ↗</button><button data-open="calendar">打开日历 ↗</button></div>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="toolbar"><span id="today-date">个人工作台</span><div class="toolbar-actions"><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="搜索事项" placeholder="找一件事…"></label><button id="refresh" class="button subtle">↻ 刷新系统清单</button></div></header>
+    <main id="main" tabindex="-1"><div class="loading"><span class="loading-mark"></span><h1>把事情理一理。</h1><p>正在读取你的工作台…</p></div></main>
+    <footer class="page-footer"><span>留一点心力，给正在做的事。</span><span id="sync-time">正在读取</span></footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+</body>
+</html>

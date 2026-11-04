@@ -1,0 +1,66 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-and-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m unittest discover -s scripts -p 'test_*.py' -v
+      - run: node --check web/app.js
+      - run: python scripts/install.py --dest "$RUNNER_TEMP/gtd-skill"
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: python scripts/verify_workbench_browser.py --artifacts .test-artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: synthetic-browser-evidence
+          path: .test-artifacts/
+
+  native-build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile and verify signed native components in temporary state
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          sys.path.insert(0, 'scripts')
+          import gtd
+          import gtd_notifications
+          with tempfile.TemporaryDirectory() as directory:
+              state = gtd.State(Path(directory) / 'isolated')
+              bridge = gtd.native_binary(state).parents[2]
+              app = gtd_notifications.bundle(state)
+              for bundle in (bridge, app):
+                  subprocess.run(['codesign', '--verify', '--deep', '--strict', str(bundle)], check=True)
+              state.db.close()
+          PY
