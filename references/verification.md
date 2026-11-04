@@ -19,7 +19,7 @@ Those local checks used macOS 27.2 and Codex CLI 0.166.0. They do not establish 
 
 Before the initial public push, the public source separately passed all 28 unit tests, the browser fixture with generic demonstration content, both native builds with strict signature checks, and temporary-directory install/update checks. Existing installs are refused without `--update`; unrelated files survive an update. No live system-list access, real task write or model extraction was needed for those release checks.
 
-## v0.2.0 downloadable app
+## v0.3.0 downloadable app
 
 Release packaging uses only the source installation manifest, a generated app icon and compiled native components. Both Mach-O executables target macOS 14 and are checked for the labelled architecture. The app's Info.plist contains no author-specific Python, source or state path. Runtime helpers are copied to private state; the signed app is never a writable state directory.
 
@@ -35,7 +35,7 @@ A separate synthetic smoke check made one real `gpt-6.1-terra / high` request th
 
 A second real synthetic check used the installed asynchronous answer endpoint with the sparse `/usr/bin:/bin` PATH typical of a GUI login service. Saving returned before inference (about 5 ms in that local check), the detached worker located the user CLI, and its `gpt-6.1-terra / high` job completed with zero formal writes. The worker preserves the caller's PATH priority and adds the usual user/Homebrew CLI locations.
 
-The personal installed variant was merged separately to preserve its existing project-brief code and configuration, and passed its own 54 tests including those project-brief regressions. That private extension and its data are not part of the public source. v0.2.0 release assets remain the original tagged build.
+The personal installed variant was merged separately to preserve its existing project-brief code and configuration, and passed its own 54 tests including those project-brief regressions. That private extension and its data are not part of the public source. The v0.2.0 release remains available as the first tagged preview.
 
 ## Explicit limits
 

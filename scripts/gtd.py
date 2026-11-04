@@ -27,7 +27,7 @@ import gtd_models
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 DEFAULT_STATE = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "personal-gtd"
 LABEL = "local.codex.personal-gtd.history-hook"
 BUCKETS = {"inbox", "next", "waiting", "someday", "project", "reference"}
