@@ -79,7 +79,7 @@ def audit_app(app, architecture):
             raise RuntimeError("Runtime data found in " + str(path.relative_to(app)))
     for relative in ("Contents/MacOS/gtd-notify", "Contents/Resources/Personal GTD Bridge.app/Contents/MacOS/gtd-native"):
         binary = app / relative
-        run(["/usr/bin/lipo", "-verify_arch", architecture, str(binary)])
+        run(["/usr/bin/lipo", str(binary), "-verify_arch", architecture])
         version = run(["/usr/bin/vtool", "-show-build", str(binary)], capture_output=True, text=True).stdout
         if "minos 14.0" not in version:
             raise RuntimeError("Unexpected deployment target in " + relative + ": " + version)
