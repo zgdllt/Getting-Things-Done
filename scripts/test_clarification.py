@@ -37,7 +37,7 @@ class ClarificationTests(unittest.TestCase):
             "explanation": "你反馈已基本修复，下一步用一次回归检查确认剩余问题。", "follow_up": follow_up}]}
 
     def process(self, result=None):
-        with patch.object(gtd, "run_extractor", return_value=result or self.result()), patch.object(gtd, "native") as native:
+        with patch.object(gtd, "extractor_command", return_value=["synthetic-codex", "--model", "fixture-model"]), patch.object(gtd, "run_extractor", return_value=result or self.result()), patch.object(gtd, "native") as native:
             clarify.process(self.state)
             native.assert_not_called()
 
@@ -89,7 +89,7 @@ class ClarificationTests(unittest.TestCase):
 
     def test_failure_keeps_answers_retry_uses_saved_answers(self):
         job = self.save()
-        with patch.object(gtd, "run_extractor", side_effect=TimeoutError("合成服务暂不可用")):
+        with patch.object(gtd, "extractor_command", return_value=["synthetic-codex", "--model", "fixture-model"]), patch.object(gtd, "run_extractor", side_effect=TimeoutError("合成服务暂不可用")):
             clarify.process(self.state)
         self.assertEqual(self.state.rows("SELECT state FROM answer_jobs")[0]["state"], "error")
         self.assertEqual(self.state.rows("SELECT answer FROM questions")[0]["answer"], "已基本修复，先做回归检查")
@@ -133,7 +133,7 @@ class ClarificationTests(unittest.TestCase):
                 other.db.execute("UPDATE candidates SET title='另一处的新决定',updated_at='newer'")
             other.db.close()
             return self.result()
-        with patch.object(gtd, "run_extractor", side_effect=changed):
+        with patch.object(gtd, "extractor_command", return_value=["synthetic-codex", "--model", "fixture-model"]), patch.object(gtd, "run_extractor", side_effect=changed):
             clarify.process(self.state)
         self.assertEqual(self.state.rows("SELECT title FROM candidates")[0]["title"], "另一处的新决定")
         self.assertEqual(self.state.rows("SELECT state FROM answer_jobs")[0]["state"], "error")
@@ -189,11 +189,11 @@ class ClarificationTests(unittest.TestCase):
         with self.state.db:
             self.state.db.execute("UPDATE questions SET candidate_key=NULL")
         job = self.save()
-        with patch.object(gtd, "run_extractor", side_effect=TimeoutError("合成超时")):
+        with patch.object(gtd, "extractor_command", return_value=["synthetic-codex", "--model", "fixture-model"]), patch.object(gtd, "run_extractor", side_effect=TimeoutError("合成超时")):
             clarify.process(self.state)
         with patch.object(clarify, "start"):
             web.action(self.state, "/api/clarify", {"job_id": job["job_id"]})
-        with patch.object(gtd, "run_extractor", return_value={"summary": "已记录你的系统设置决定", "updates": []}):
+        with patch.object(gtd, "extractor_command", return_value=["synthetic-codex", "--model", "fixture-model"]), patch.object(gtd, "run_extractor", return_value={"summary": "已记录你的系统设置决定", "updates": []}):
             clarify.process(self.state)
         self.assertEqual(web.dashboard_state(self.state)["answer_jobs"][0]["summary"], "已记录你的系统设置决定")
 

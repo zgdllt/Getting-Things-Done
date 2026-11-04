@@ -56,7 +56,7 @@ class WorkbenchTests(unittest.TestCase):
         self.question()
         with self.assertRaises(ValueError): self.prepare()
         web.save_answers(self.state,[{"key":"q","text":"推进"}])
-        with patch.object(gtd,"run_extractor",return_value={"summary":"已整理", "updates":[{
+        with patch.object(gtd,"extractor_command",return_value=["synthetic-codex","--model","fixture-model"]), patch.object(gtd,"run_extractor",return_value={"summary":"已整理", "updates":[{
                 "candidate_key":self.key,"title":"明确下一步","bucket":"next","project":None,
                 "suggested_due":None,"disposition":"actionable","explanation":"先做这一步。","follow_up":None}]}):
             gtd_clarify.process(self.state)
