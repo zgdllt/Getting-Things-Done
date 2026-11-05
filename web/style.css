@@ -60,7 +60,7 @@ dialog .display-option{display:flex;align-items:center;gap:10px;padding:14px;bor
 .deck-busy .deck-action-overlay{display:grid}
 .deck-action-overlay>div,.deck-completion-notice{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:85%;padding:26px 28px;background:#f8fcf2;border:1px solid #c9dab9;border-radius:15px;box-shadow:0 16px 50px #29452b1c;text-align:center;font-size:15px;color:var(--green)}
 .deck-action-overlay .deck-feedback-icon,.deck-completion-notice .deck-feedback-icon{width:55px;height:55px;display:grid;place-items:center;border-radius:50%;background:#dceacb;font-size:30px}
-.deck-completion-notice{position:fixed;z-index:40;pointer-events:none;animation:completion-linger 1.2s ease-out both}
+.deck-completion-notice{position:fixed;z-index:40;pointer-events:none;animation:completion-linger .8s ease-out both}
 .deck-busy .deck-controls{opacity:.35;pointer-events:none}
 .deck-action-overlay>[data-phase="success"]{animation:reminder-pop .22s cubic-bezier(.2,.8,.3,1) both}
 .deck-action-overlay>[data-phase="success"]>.deck-feedback-icon{animation:reminder-tick .22s ease-out both}
