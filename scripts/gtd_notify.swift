@@ -118,8 +118,11 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
         guard !startingService else { return }
         startingService = true
         let bundled = Bundle.main.resourceURL?.appendingPathComponent("skill/scripts/gtd_dashboard.py")
-        let script = bundled.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0.path : nil }
-            ?? (Bundle.main.object(forInfoDictionaryKey: "GTDServiceScript") as? String ?? "")
+        let configured = (Bundle.main.object(forInfoDictionaryKey: "GTDServiceScript") as? String)
+            .flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
+        let script = configured
+            ?? bundled.flatMap { FileManager.default.fileExists(atPath: $0.path) ? $0.path : nil }
+            ?? ""
         DispatchQueue.global(qos: .userInitiated).async {
             guard let python = self.pythonExecutable() else {
                 DispatchQueue.main.async {
@@ -217,7 +220,18 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
 
     func verifyIfRequested(attempt: Int) {
         guard let directory = verifyDirectory, !verificationDone else { return }
-        let script = "({heading:document.querySelector('h1')?.textContent||'',view:location.hash.slice(1),navCount:document.querySelectorAll('nav [data-view]').length,sessionReady:!location.hash.includes('access='),nativeClipboard:!!window.webkit?.messageHandlers?.gtdClipboard})"
+        let script = """
+        (() => {
+            const marker = document.createElement('div');
+            marker.className = 'deck-success-notice';
+            marker.hidden = true;
+            document.body.append(marker);
+            const style = getComputedStyle(marker);
+            const feedback = {duration:window.TaskDeck?.feedbackDuration||0,hold:style.animationDelay,fade:style.animationDuration,reducedMotion:matchMedia('(prefers-reduced-motion:reduce)').matches};
+            marker.remove();
+            return {heading:document.querySelector('h1')?.textContent||'',view:location.hash.slice(1),navCount:document.querySelectorAll('nav [data-view]').length,sessionReady:!location.hash.includes('access='),nativeClipboard:!!window.webkit?.messageHandlers?.gtdClipboard,feedback};
+        })()
+        """
         webView?.evaluateJavaScript(script) { result, error in
             guard let value = result as? [String: Any], let heading = value["heading"] as? String,
                   ["今天，先做哪一件？", "先理清楚，再放进清单。", "目标要有落脚的下一步。", "停一下，让事情重新有序。"].contains(heading), value["sessionReady"] as? Bool == true else {

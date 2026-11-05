@@ -4,7 +4,7 @@ A standalone, Chinese-language demo using synthetic examples. It shares `web/dec
 
 The default is one card at a time. Use horizontal touch/trackpad gestures, arrow buttons or keyboard arrows. Settings switches to the retained list layout. Browse Today, clarify a candidate, save an answer, explicitly confirm a concrete next step, complete it and see it in Done. Capture creates a new candidate. Settings also offers a confirmed reset of demo data.
 
-Completing or dismissing shows an in-card acknowledgement before the card slides away. Saving an answer transitions to its saved response state on the same card so you can review and confirm it. A persistent receipt and a toast make the result visible. Reduced-motion settings skip the transitions while keeping the acknowledgement.
+Completing or dismissing shows an in-card acknowledgement before the card slides away. Saving an answer transitions to its saved response state on the same card so you can review and confirm it. Every success marker and toast holds for 0.4 seconds and fades over 0.3 seconds; markers remain independent of card navigation and operation receipts stay readable. Reduced-motion settings skip the transitions while keeping the acknowledgement.
 
 ## Build and run
 

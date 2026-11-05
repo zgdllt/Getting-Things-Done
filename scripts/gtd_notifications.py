@@ -41,7 +41,7 @@ def build_bundle(state):
     info = {"CFBundleIdentifier": "local.codex.personal-gtd.notifications",
             "CFBundleName": "Getting Things Done", "CFBundleDisplayName": "Getting Things Done",
             "CFBundleExecutable": "gtd-notify", "CFBundlePackageType": "APPL",
-            "CFBundleVersion": "3", "CFBundleShortVersionString": gtd.VERSION, "LSUIElement": True,
+            "CFBundleVersion": "5", "CFBundleShortVersionString": gtd.VERSION, "LSUIElement": True,
             "CFBundleIconFile": "GTD", "NSHighResolutionCapable": True,
             "GTDStateRoot": str(state.base), "GTDPythonPath": gtd.stable_python(),
             "GTDServiceScript": str(gtd.HERE / "gtd_dashboard.py"),
