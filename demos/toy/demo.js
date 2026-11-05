@@ -29,15 +29,12 @@ function persist() {
   catch (_) {
     if (!storageWarned) {
       storageWarned = true;
-      toast("浏览器未允许保存，当前操作会保留到页面关闭。");
+      toast("浏览器未允许保存，当前操作会保留到页面关闭。", true);
     }
   }
 }
-function toast(text) {
-  $("#toast").textContent = text;
-  $("#toast").hidden = false;
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => $("#toast").hidden = true, 3800);
+function toast(text, error = false) {
+  TaskDeck.showToast($("#toast"), text, error);
 }
 function itemCard(item, index) {
   if (item.state !== "inbox") return `<article class="focus-task"><div><span class="tag green">${escape(item.bucket)}</span><p class="focus-task-title">${escape(item.title)}</p><p class="intro focus-notes">${escape(item.note || "从这里开始，往前走一小步。")}</p></div>${item.state === "done" ? `<button class="button subtle" data-restore="${escape(item.id)}">↶ 放回今天</button>` : `<button class="button primary focus-complete" data-complete="${escape(item.id)}">✓ 标记完成</button>`}</article>`;
@@ -91,11 +88,11 @@ async function itemAction(item, action) {
     save:["正在保存答复…", "答复已保存 · 接下来确认下一步", "✓ 答复已保存，确认后再放进今天。"]
   }[action];
   const answer = (item.draft || "").trim();
-  if (action === "save" && !answer) return toast("先写下你的决定或下一步。");
+  if (action === "save" && !answer) return toast("先写下你的决定或下一步。", true);
   try {
     await deck.act({
       id:state.view + ":" + state.query, pending:messages[0], success:messages[1],
-      kind:action === "save" ? "save" : "advance", completion:action === "complete"
+      kind:action === "save" ? "save" : "advance"
     }, () => {
       if (action === "complete") item.state = "done";
       if (action === "restore") item.state = "today";
@@ -104,7 +101,7 @@ async function itemAction(item, action) {
       persist();
     });
     toast(messages[2]);
-  } catch (error) { toast(error.message || "操作未完成，请重试。"); }
+  } catch (error) { toast(error.message || "操作未完成，请重试。", true); }
 }
 document.addEventListener("input", event => {
   const node = event.target;

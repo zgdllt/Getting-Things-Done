@@ -24,6 +24,19 @@ def swipe(page, locator, direction=-1):
     page.mouse.up()
 
 
+def success_notice(page, text):
+    notice = page.locator(".deck-success-notice")
+    expect(notice).to_have_count(1)
+    expect(notice).to_be_visible()
+    expect(notice).to_contain_text(text)
+    expect(page.locator(".deck-busy")).to_have_count(0)
+    timing = notice.evaluate("""node => {
+        const style = getComputedStyle(node);
+        return [style.animationDelay, style.animationDuration, style.pointerEvents];
+    }""")
+    assert timing == ["0.4s", "0.3s", "none"], timing
+
+
 def run(artifacts, browser_executable=None):
     artifacts = Path(artifacts).resolve()
     artifacts.mkdir(parents=True, exist_ok=True)
@@ -147,6 +160,7 @@ def run(artifacts, browser_executable=None):
                 expect(page.locator(".deck-busy")).to_have_count(0)
                 expect(page.locator(".deck-receipt")).to_contain_text("已完成：" + title)
                 assert page.locator(".focus-task-title").inner_text() != title
+                success_notice(page, "已完成：" + title)
                 # A confirmed write followed by a failed GET must recover the UI
                 # and report pending synchronization, rather than replaying it.
                 title = page.locator(".focus-task-title").inner_text()
@@ -162,6 +176,22 @@ def run(artifacts, browser_executable=None):
                 page.evaluate("load()")
                 assert page.locator(".focus-task-title").inner_text() != title
 
+                # Exercise the private client's other feedback paths with
+                # synthetic API success replies; no model or native writes.
+                page.locator("nav [data-view=inbox]").click()
+                answer.fill("合成答复，只验证反馈动画")
+                page.route("**/api/answers", lambda route: route.fulfill(json={"ok": True}))
+                page.locator("#save-answers").click()
+                expect(page.locator(".deck-receipt")).to_contain_text("答复已保存")
+                success_notice(page, "答复已保存")
+                page.unroute("**/api/answers")
+                page.route("**/api/dismiss", lambda route: route.fulfill(json={"ok": True}))
+                page.locator("[data-dismiss]").first.click()
+                expect(page.locator(".deck-receipt")).to_contain_text("已忽略")
+                success_notice(page, "已忽略")
+                page.unroute("**/api/dismiss")
+                assert not native_calls.called
+
                 demo = browser.new_page(viewport={"width": 1200, "height": 960})
                 demo.on("pageerror", lambda error: errors.append(str(error)))
                 demo.goto(f"http://127.0.0.1:{toy.server_port}/toy/gtd-demo/index.html")
@@ -174,6 +204,7 @@ def run(artifacts, browser_executable=None):
                 demo.screenshot(path=str(artifacts/"toy-action-complete.png"))
                 expect(demo.locator("#done-count")).to_have_text("1")
                 expect(demo.locator(".deck-receipt")).to_contain_text("已完成：放下屏幕")
+                success_notice(demo, "已完成：放下屏幕")
                 demo.locator("nav [data-view=inbox]").click()
                 textarea = demo.locator("[data-answer]").first
                 textarea.fill("查好开放时间，周六上午出发")
@@ -184,6 +215,7 @@ def run(artifacts, browser_executable=None):
                 expect(demo.locator(".deck-action-overlay")).to_be_visible()
                 expect(demo.locator(".deck-busy")).to_have_count(0)
                 expect(demo.locator(".deck-receipt")).to_contain_text("答复已保存")
+                success_notice(demo, "答复已保存")
                 expect(demo.locator("#today-count")).to_have_text("2")
                 textarea.fill("")
                 demo.get_by_role("button", name="下一张", exact=True).click()
@@ -199,6 +231,7 @@ def run(artifacts, browser_executable=None):
                 expect(demo.locator(".deck-action-overlay")).to_be_visible()
                 expect(demo.locator(".deck-busy")).to_have_count(0)
                 expect(demo.locator(".deck-receipt")).to_contain_text("已忽略")
+                success_notice(demo, "已忽略")
                 demo.locator("#capture-input").fill("合成新想法，周末整理书架")
                 demo.locator("#capture-form [type=submit]").click()
                 demo.locator("#app-settings").click()
@@ -218,6 +251,35 @@ def run(artifacts, browser_executable=None):
                 demo.wait_for_timeout(450)
                 demo.evaluate("window.scrollTo(0,0)")
                 demo.screenshot(path=str(artifacts/"toy-desktop.png"), full_page=True)
+                demo.locator("nav [data-view=done]").click()
+                demo.get_by_role("button", name="放回今天", exact=False).click()
+                expect(demo.locator("#done-count")).to_have_text("0")
+                success_notice(demo, "已放回今天")
+                demo.evaluate("toast('合成成功提示')")
+                expect(demo.locator("#toast")).to_have_text("合成成功提示")
+                toast_timing = demo.locator("#toast").evaluate("""node => {
+                    const style = getComputedStyle(node);
+                    return [style.animationDelay, style.animationDuration];
+                }""")
+                assert toast_timing == ["0s, 0.4s", "0.28s, 0.3s"], toast_timing
+                demo.wait_for_timeout(450)
+                demo.evaluate("toast('连续操作的新提示')")
+                expect(demo.locator("#toast")).to_have_text("连续操作的新提示")
+                restarted = demo.locator("#toast").evaluate("node => node.getAnimations().find(animation => animation.animationName === 'toast-hop').currentTime")
+                assert restarted is not None and 0 <= restarted < 200, restarted
+                demo.wait_for_timeout(300)
+                expect(demo.locator("#toast")).to_be_visible()
+                expect(demo.locator("#toast")).to_be_hidden(timeout=2000)
+                demo.evaluate("toast('合成错误提示', true)")
+                demo.wait_for_timeout(800)
+                expect(demo.locator("#toast")).to_be_visible()
+                demo.emulate_media(reduced_motion="reduce")
+                demo.locator("nav [data-view=today]").click()
+                demo.get_by_role("button", name="标记完成", exact=False).click()
+                expect(demo.locator(".deck-success-notice")).to_be_visible()
+                expect(demo.locator(".deck-busy")).to_have_count(0)
+                assert demo.locator(".deck-success-notice").evaluate("node => getComputedStyle(node).animationName") == "none"
+                expect(demo.locator(".deck-success-notice")).to_have_count(0, timeout=2000)
                 touch_context = browser.new_context(viewport={"width": 390, "height": 844}, has_touch=True, is_mobile=True)
                 touch = touch_context.new_page()
                 touch.goto(f"http://127.0.0.1:{toy.server_port}/toy/gtd-demo/index.html")
@@ -242,6 +304,8 @@ def run(artifacts, browser_executable=None):
                                             "settings-persistence", "stale-response", "mobile", "touch-swipe", "trackpad",
                                             "toy-subpath", "toy-clarify-confirm-complete", "toy-capture",
                                             "action-feedback", "action-transitions", "action-failure-stays",
+                                            "shared-success-timing", "save-dismiss-restore-feedback",
+                                            "success-toast-restart", "error-toast-persists", "reduced-motion",
                                             "confirmed-write-refresh-failure"],
                               "artifacts": str(artifacts)}, ensure_ascii=False))
         finally:

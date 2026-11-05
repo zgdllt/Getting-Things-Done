@@ -3,6 +3,19 @@
 // Shared by the private workbench and the standalone Toy. Navigation never
 // changes a task's business state; the caller retains all action handlers.
 window.TaskDeck = class TaskDeck {
+  static feedbackDuration = 700;
+
+  static showToast(node, text, error = false) {
+    clearTimeout(node.gtdToastTimer);
+    node.hidden = true;
+    node.textContent = text;
+    node.className = error ? "error" : "";
+    // Restart the acknowledgement when another action finishes during its fade.
+    void node.offsetWidth;
+    node.hidden = false;
+    if (!error) node.gtdToastTimer = setTimeout(() => node.hidden = true, TaskDeck.feedbackDuration);
+  }
+
   constructor(onChange, root = document) {
     this.onChange = onChange;
     this.positions = new Map();
@@ -121,26 +134,26 @@ window.TaskDeck = class TaskDeck {
     }
   }
 
-  holdCompletion(badge, bounds) {
+  holdFeedback(badge, bounds) {
     if (!badge || !bounds?.width) return;
-    this.heldCompletion?.remove();
+    this.heldNotice?.remove();
     const notice = badge.cloneNode(true);
-    notice.className = "deck-completion-notice";
+    notice.className = "deck-success-notice";
     notice.setAttribute("aria-hidden", "true");
     notice.style.left = bounds.left + "px";
     notice.style.top = bounds.top + "px";
     notice.style.width = bounds.width + "px";
     document.body.append(notice);
-    this.heldCompletion = notice;
+    this.heldNotice = notice;
     setTimeout(() => {
       notice.remove();
-      if (this.heldCompletion === notice) this.heldCompletion = null;
-    }, 800);
+      if (this.heldNotice === notice) this.heldNotice = null;
+    }, TaskDeck.feedbackDuration);
   }
 
-  async act({id, pending, success, kind = "advance", origin, completion = false}, operation, refresh = this.onChange) {
-    this.heldCompletion?.remove();
-    this.heldCompletion = null;
+  async act({id, pending, success, kind = "advance", origin}, operation, refresh = this.onChange) {
+    this.heldNotice?.remove();
+    this.heldNotice = null;
     const original = this.find(id);
     // List rows retain their independent request lifecycles.
     if (!original) {
@@ -159,7 +172,7 @@ window.TaskDeck = class TaskDeck {
       this.feedback.set(id, {type:"success", text:typeof success === "function" ? success(result) : success});
       this.paintFeedback(id);
       const old = this.find(id);
-      const badge = completion ? old?.querySelector('.deck-action-overlay>[data-phase="success"]') : null;
+      const badge = old?.querySelector('.deck-action-overlay>[data-phase="success"]');
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (old && !reduced) {
         // Let the acknowledgement pop in while the card starts moving.
@@ -182,7 +195,7 @@ window.TaskDeck = class TaskDeck {
         next.classList.add("deck-action-in");
         setTimeout(() => next.classList.remove("deck-action-in"), 280);
       }
-      if (completion) this.holdCompletion(badge, badgeBounds);
+      this.holdFeedback(badge, badgeBounds);
       return result;
     } catch (error) {
       this.actions.delete(id);

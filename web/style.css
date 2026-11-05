@@ -58,9 +58,9 @@ dialog .display-option{display:flex;align-items:center;gap:10px;padding:14px;bor
 .deck-receipt[data-phase="error"]{background:var(--amber-pale);color:var(--amber)}
 .deck-action-overlay{display:none;position:absolute;inset:0;z-index:2;place-items:center;pointer-events:none;background:#fdfef9ad;border-radius:13px;backdrop-filter:blur(2px)}
 .deck-busy .deck-action-overlay{display:grid}
-.deck-action-overlay>div,.deck-completion-notice{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:85%;padding:26px 28px;background:#f8fcf2;border:1px solid #c9dab9;border-radius:15px;box-shadow:0 16px 50px #29452b1c;text-align:center;font-size:15px;color:var(--green)}
-.deck-action-overlay .deck-feedback-icon,.deck-completion-notice .deck-feedback-icon{width:55px;height:55px;display:grid;place-items:center;border-radius:50%;background:#dceacb;font-size:30px}
-.deck-completion-notice{position:fixed;z-index:40;pointer-events:none;animation:completion-linger .3s ease-out .5s both}
+.deck-action-overlay>div,.deck-success-notice{display:flex;flex-direction:column;align-items:center;gap:14px;max-width:85%;padding:26px 28px;background:#f8fcf2;border:1px solid #c9dab9;border-radius:15px;box-shadow:0 16px 50px #29452b1c;text-align:center;font-size:15px;color:var(--green)}
+.deck-action-overlay .deck-feedback-icon,.deck-success-notice .deck-feedback-icon{width:55px;height:55px;display:grid;place-items:center;border-radius:50%;background:#dceacb;font-size:30px}
+.deck-success-notice{position:fixed;z-index:40;pointer-events:none;animation:success-fade .3s ease-out .4s both}
 .deck-busy .deck-controls{opacity:.35;pointer-events:none}
 .deck-action-overlay>[data-phase="success"]{animation:reminder-pop .22s cubic-bezier(.2,.8,.3,1) both}
 .deck-action-overlay>[data-phase="success"]>.deck-feedback-icon{animation:reminder-tick .22s ease-out both}
@@ -69,12 +69,14 @@ dialog .display-option{display:flex;align-items:center;gap:10px;padding:14px;bor
 .deck-action-in .deck-page{animation:deck-arrive .18s ease-out}
 .deck-action-in .deck-receipt{animation:receipt-hop .28s ease-out both}
 #toast{padding:16px 23px;font-size:13px;line-height:1.7;box-shadow:0 10px 40px #193b3235}
-#toast:not([hidden]){animation:toast-hop .28s ease-out both}
+#toast:not([hidden]){animation:toast-hop .28s ease-out both,toast-fade .3s ease-out .4s forwards}
+#toast.error:not([hidden]){animation:toast-hop .28s ease-out both}
 @keyframes reminder-pop{0%{opacity:0;transform:translateY(14px) scale(.78)}48%{opacity:1;transform:translateY(-5px) scale(1.05)}76%{transform:translateY(2px) scale(.98)}100%{opacity:1;transform:none}}
 @keyframes reminder-tick{0%{transform:scale(.5) rotate(-18deg)}55%{transform:scale(1.16) rotate(8deg)}80%{transform:scale(.96) rotate(-3deg)}100%{transform:none}}
 @keyframes receipt-hop{0%{opacity:.3;transform:translateY(7px) scale(.97)}48%{opacity:1;transform:translateY(-3px) scale(1.015)}76%{transform:translateY(1px) scale(.995)}100%{opacity:1;transform:none}}
 @keyframes toast-hop{0%{opacity:0;transform:translate(-50%,12px) scale(.9)}48%{opacity:1;transform:translate(-50%,-4px) scale(1.03)}76%{transform:translate(-50%,1px) scale(.99)}100%{opacity:1;transform:translateX(-50%)}}
-@keyframes completion-linger{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes success-fade{from{opacity:1;transform:none}to{opacity:0;transform:translateY(-6px) scale(.98)}}
+@keyframes toast-fade{from{opacity:1}to{opacity:0}}
 @keyframes deck-dismiss{to{opacity:0;transform:translateX(-110px) rotate(-7deg) scale(.92)}}
 @keyframes deck-save{to{opacity:0;transform:translateY(-20px) rotateX(12deg) scale(.96)}}
 @keyframes deck-arrive{from{opacity:0;transform:translateX(40px) scale(.97)}to{opacity:1;transform:none}}
