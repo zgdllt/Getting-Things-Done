@@ -1,0 +1,19 @@
+.demo-banner{display:flex;align-items:center;gap:12px;padding:14px 48px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11px;background:#f1f5eb}
+.demo-banner .tag{flex-shrink:0;letter-spacing:1px;background:#dce9cc}
+.demo-work-area{max-width:880px;margin:36px auto 0}
+.demo-work-area .focus-task{min-height:370px}
+.demo-work-area .focus-task-title{font-size:32px;max-width:620px}
+.demo-work-area .candidate{min-height:380px}
+.demo-list .focus-task{min-height:0}
+.demo-list .candidate{min-height:0;margin:15px 0}
+.demo-list .candidate:first-child{margin-top:0}
+.demo-list .candidate:last-child{margin-bottom:0}
+.demo-source{font-size:11px}
+#next-title{width:100%}
+@media(max-width:620px){
+  .demo-banner{padding:12px 20px;gap:10px;font-size:10px}
+  .demo-work-area{margin-top:25px}
+  .demo-work-area .focus-task{min-height:330px}
+  .demo-work-area .focus-task-title{font-size:26px}
+  .sidebar-bottom>.demo-source{display:none}
+}

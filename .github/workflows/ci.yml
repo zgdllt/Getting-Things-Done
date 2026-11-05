@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python -m unittest discover -s scripts -p 'test_*.py' -v
       - run: node --check web/app.js
+      - run: node --check web/deck.js && node --check demos/toy/demo.js
       - run: python scripts/install.py --dest "$RUNNER_TEMP/gtd-skill"
 
   browser:
@@ -33,6 +34,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
       - run: python scripts/verify_workbench_browser.py --artifacts .test-artifacts
+      - run: python scripts/verify_cards_browser.py --artifacts .test-artifacts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

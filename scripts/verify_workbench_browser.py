@@ -76,6 +76,11 @@ def run(artifacts=None, browser_executable=None):
                 settings=page.locator('#app-settings')
                 assert settings.bounding_box()['x']<222
                 settings.click();page.get_by_role('heading',name='应用设置',exact=True).wait_for()
+                # The dedicated cards scenario tests the new default. Keep the
+                # original bulk-flow regression in the selectable list mode.
+                page.locator('input[name=task_display][value=list]').check()
+                page.get_by_role('button',name='保存展示设置').click()
+                settings.click()
                 expect(page.locator('#model-choice')).to_have_value('gpt-6.1-terra')
                 expect(page.locator('#reasoning-choice')).to_have_value('high')
                 page.screenshot(path=str(artifacts/'workbench-fixture-settings.png'),full_page=True)

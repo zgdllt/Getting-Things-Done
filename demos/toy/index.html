@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Getting Things Done · 一次，只想一件事</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./workbench.css">
+  <link rel="stylesheet" href="./demo.css">
+  <script src="./deck.js" defer></script>
+  <script src="./demo.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#today"><img src="./icon.svg" width="36" height="36" alt=""><span><span class="brand-title">Getting Things<br>Done</span><small>A LITTLE ROOM TO THINK</small></span></a>
+    <p class="nav-label">给思绪一个落脚点</p>
+    <nav aria-label="主导航">
+      <button data-view="today" aria-current="page"><span class="nav-symbol">◷</span>今天<span id="today-count" class="badge"></span></button>
+      <button data-view="inbox"><span class="nav-symbol">▤</span>待澄清<span id="inbox-count" class="badge"></span></button>
+      <button data-view="done"><span class="nav-symbol">✓</span>已完成<span id="done-count" class="badge"></span></button>
+    </nav>
+    <div class="sidebar-bottom">
+      <button id="app-settings" class="settings-button" aria-label="应用设置"><span aria-hidden="true">⚙</span><span>设置<small>卡片 / 条目 · 随你习惯</small></span></button>
+      <div class="connection"><i></i><span>TOY · 交互演示</span></div>
+      <p>先收集，再澄清。<br>把注意力，留给当下。</p>
+      <a class="demo-source" href="https://github.com/zgdllt/Getting-Things-Done" target="_blank" rel="noopener noreferrer">了解桌面版 ↗</a>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="toolbar"><span>一次，只想一件事。</span><label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" aria-label="搜索事项" placeholder="找一件事…"></label></header>
+    <div class="demo-banner"><span class="tag">可交互 DEMO</span><span>全部为演示数据；答复本地模拟，不调用模型或读取系统应用。操作仅保存在当前浏览器。</span></div>
+    <main id="main" tabindex="-1"></main>
+    <footer class="page-footer"><span>留一点心力，给正在做的事。</span><span>Getting Things Done</span></footer>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title"><div id="dialog-content"></div></dialog>
+</body>
+</html>

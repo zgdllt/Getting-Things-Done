@@ -15,7 +15,7 @@ PAYLOAD = (
     "scripts/gtd_models.py", "scripts/gtd_sources.py", "scripts/gtd_clarify.py",
     "scripts/gtd_notifications.py", "scripts/gtd_notify.swift", "scripts/install.py",
     "scripts/test_gtd.py", "scripts/test_workbench.py", "scripts/verify_workbench_browser.py",
-    "web/index.html", "web/app.js", "web/style.css", "web/icon.svg",
+    "web/index.html", "web/app.js", "web/deck.js", "web/style.css", "web/icon.svg",
 )
 
 

@@ -37,6 +37,24 @@ class WorkbenchTests(unittest.TestCase):
     def prepare(self):
         return web.prepare(self.state,{"items":[{"candidate_key":self.key,"title":"明确下一步","list_id":"list"}]})
 
+    def test_display_preferences_default_and_preserve_other_configuration(self):
+        gtd.atomic_json(self.base/"config.json", {
+            "extractor_model": "fixture-model", "history_root": "/private/fixture",
+            "workbench_preferences": {"other_setting": "keep"},
+        })
+        self.assertEqual(web.dashboard_state(self.state)["preferences"]["task_display"], "cards")
+        result = web.action(self.state, "/api/preferences", {"task_display": "list"})
+        self.assertEqual(result["preferences"]["task_display"], "list")
+        self.assertEqual(self.state.config(), {
+            "extractor_model": "fixture-model", "history_root": "/private/fixture",
+            "workbench_preferences": {"other_setting": "keep", "task_display": "list"},
+        })
+        self.assertEqual(web.dashboard_state(self.state)["preferences"]["task_display"], "list")
+        with self.assertRaises(ValueError):
+            web.action(self.state, "/api/preferences", {"task_display": "unknown"})
+        self.assertEqual(self.state.config()["workbench_preferences"]["task_display"], "list")
+        self.assertFalse(self.state.rows("SELECT * FROM operations"))
+
     def test_answers_are_atomic_and_do_not_create_formal_items(self):
         self.question()
         with self.assertRaises(ValueError):

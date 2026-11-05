@@ -40,7 +40,11 @@ Notifications name the specific item and the question, and open the native app's
 
 ## Settings and immediate replies
 
-In the current source version, **Settings** sits at the bottom left of the sidebar. It contains the model and reasoning selectors, background/notification status and system-app permission status. GTD defaults to **`gpt-6.1-terra` / `high`**. Choose from the local Codex model catalog or enter another model ID supported by your provider. Settings affect the next GTD model call and preserve your existing provider, login and ordinary Codex chat defaults.
+In the current source version, **Settings** sits at the bottom left of the sidebar. It contains the task display style, model and reasoning selectors, background/notification status and system-app permission status. GTD defaults to **`gpt-6.1-terra` / `high`**. Choose from the local Codex model catalog or enter another model ID supported by your provider. Settings affect the next GTD model call and preserve your existing provider, login and ordinary Codex chat defaults.
+
+The current source defaults to **swipeable cards** for Today and Clarify. Navigate with a horizontal touch/trackpad gesture, arrow buttons, or the left/right arrow keys while the deck is focused. Switching cards preserves answer drafts and selected candidates. Completing and confirming tasks use their explicit buttons. Choose **Settings → 待办展示 → 条目列表** to keep the original list layout; the preference persists across reloads. This source feature is newer than the v0.4.0 download.
+
+A standalone, synthetic-data **Bilibili Toy demo** is available in [demos/toy](demos/toy/README.md). It runs without a local server API, Computer History, model calls or access to Apple apps; it shares the production card-navigation code.
 
 **Save answers and organize** first saves the answers, then immediately starts a separate model job. It does not wait for the history backlog. Each card shows progress, a reply and revised next action, or a focused follow-up question. A clearly finished/dropped local candidate can be closed; formal Reminders are never completed by model inference. Failed jobs keep their answers and offer retry. Older saved answers have an **Organize using answers** action as well.
 

@@ -78,6 +78,7 @@ def dashboard_state(state):
         candidate["resolution"] = resolutions.get(candidate["key"])
     return {"ok": True, "at": gtd.now(), "timezone": gtd_sources.timezone_name(config),
             "model_settings": gtd_models.selection(state), "answer_jobs": jobs,
+            "preferences": {"task_display": config.get("workbench_preferences", {}).get("task_display", "cards")},
             "source_status": gtd_sources.status(config),
             "snapshot": native,
             "snapshot_status": read_json(state.base / "snapshot-status.json", {"ok": False, "error": "尚未读取系统清单"}),
@@ -163,6 +164,16 @@ def action(state, route, data):
         return gtd_clarify.retry(state, job_id=nonempty(data, "job_id")) if data.get("job_id") else gtd_clarify.retry(state, nonempty(data, "candidate_key"))
     if route == "/api/model":
         return gtd_models.save(state, data.get("model"), data.get("reasoning_effort"), gtd.atomic_json)
+    if route == "/api/preferences":
+        style = data.get("task_display")
+        if style not in ("cards", "list"):
+            raise ValueError("请选择卡片或条目展示")
+        with state.lock("configuration.lock", blocking=True):
+            config = state.config()
+            preferences = config.setdefault("workbench_preferences", {})
+            preferences["task_display"] = style
+            gtd.atomic_json(state.base / "config.json", config)
+        return {"ok": True, "preferences": {"task_display": style}}
     if route == "/api/dismiss":
         key = nonempty(data, "candidate_key")
         with state.lock("operations.lock"), state.db:
@@ -276,6 +287,7 @@ class Handler(BaseHTTPRequestHandler):
         route = self.path.split("?", 1)[0]
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
+                  "/deck.js": ("deck.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"),
                   "/icon.svg": ("icon.svg", "image/svg+xml")}
         if route in assets:

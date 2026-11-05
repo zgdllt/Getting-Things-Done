@@ -41,6 +41,14 @@ A second real synthetic check used the installed asynchronous answer endpoint wi
 
 The personal installed variant was merged separately to preserve its existing project-brief code and configuration, and passed its own 54 tests including those project-brief regressions. That private extension and its data are not part of the public source. The v0.2.0 release remains available as the first tagged preview.
 
+## Swipe cards and Toy demo (2026-11-05 source update)
+
+The update passed 47 isolated Python tests, the existing full workbench browser scenario, and a separate card/Toy browser scenario in Chromium. Card checks cover default display, arrow buttons, keyboard, pointer swipe, horizontal trackpad events with inertia, stable identity after refresh/insertion, draft and selection retention, filters, saved style after reload, an intentionally delayed stale state response after saving settings, and a 390 px viewport with no horizontal overflow. Mobile touch was also exercised using actual Chromium CDP touch events. The Toy ran under a nested `/toy/gtd-demo/` path and completed capture, draft/save, explicit confirmation, completion and style persistence using synthetic data. Independent review repeated touch/vertical-scroll and empty-draft checks. No real model calls or Apple task writes were needed.
+
+Reproduce with `python scripts/verify_cards_browser.py --artifacts .test-artifacts` after installing the existing development requirements and Chromium. `--browser` optionally selects an installed Chrome executable. Build the Toy with `python scripts/build_toy_demo.py`; only explicitly listed public UI resources and synthetic demo data enter the package. The official Toy doctor passed with zero findings. Browser touch emulation is not a claim of physical iPhone/Android device acceptance.
+
+After preview feedback, the card scenario also verifies visible in-card receipts and completion/dismissal/save transitions, a rejected operation keeping its original card, and an acknowledged write followed by a failed state refresh recovering from busy/inert/exit styles with a pending-sync message. Independent Chromium checks verify two list rows still issue separate concurrent completion requests and keyboard completion focuses the next card. Both the original workbench scenario and the card/Toy scenario were rerun after these changes.
+
 ## Explicit limits
 
 - Fixture writes prove state transitions and write receipts, not successful writes into every user's Apple account.
