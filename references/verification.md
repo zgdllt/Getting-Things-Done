@@ -47,7 +47,7 @@ The update passed 47 isolated Python tests, the existing full workbench browser 
 
 Reproduce with `python scripts/verify_cards_browser.py --artifacts .test-artifacts` after installing the existing development requirements and Chromium. `--browser` optionally selects an installed Chrome executable. Build the Toy with `python scripts/build_toy_demo.py`; only explicitly listed public UI resources and synthetic demo data enter the package. The official Toy doctor passed with zero findings. Browser touch emulation is not a claim of physical iPhone/Android device acceptance.
 
-## All-view card coverage (source correction after v0.5.0)
+## v0.5.1 all-view card coverage
 
 The same browser scenario now covers standalone clarification questions sharing the main candidate deck, counts/search/filters, drafts across navigation and reload, and saving those answers without calling a model. It also checks that a new standalone answer job becomes visible while older completed results remain in expandable history, including navigation during a deliberately delayed save refresh. Project, waiting, idea, review-step, calendar and summary collections use cards and retain their positions; review checkboxes survive navigation. Two calendar occurrences with the same series ID and different start times verify that both remain reachable. All four views can return to the global list style, and the added views fit a 390 px viewport. Checks use synthetic state and intercepted/fake native operations, with zero real model calls or Apple task writes.
 

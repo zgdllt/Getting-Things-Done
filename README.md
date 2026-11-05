@@ -10,7 +10,7 @@ A personal GTD companion for macOS: turn activity clues into a small clarificati
 
 The interface is currently in Chinese. This is an early preview built for local use.
 
-**[Download v0.5.0](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.0)** · [Build from source](#install-from-source)
+**[Download v0.5.1](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.1)** · [Build from source](#install-from-source)
 
 ![Getting Things Done workbench, showing synthetic example data](docs/images/workbench.png)
 
@@ -42,17 +42,17 @@ Notifications name the specific item and the question, and open the native app's
 
 In the current source version, **Settings** sits at the bottom left of the sidebar. It contains the task display style, model and reasoning selectors, background/notification status and system-app permission status. GTD defaults to **`gpt-6.1-terra` / `high`**. Choose from the local Codex model catalog or enter another model ID supported by your provider. Settings affect the next GTD model call and preserve your existing provider, login and ordinary Codex chat defaults.
 
-The current source defaults to **swipeable cards** across Today, Clarify, Projects & Waiting, and Review. Tasks, calendar events, standalone clarification questions, projects, waiting items, review steps and history entries use the same display setting; metrics and filters stay visible. This all-view coverage is a source update after v0.5.0. Navigate with a horizontal touch/trackpad gesture, arrow buttons, or the left/right arrow keys while the deck is focused. Switching cards preserves answer drafts, selected candidates and review checks. Completing and confirming tasks use their explicit buttons. Choose **Settings → 待办展示 → 条目列表** to keep the original list layout; the preference persists across reloads. Completion, dismissal, saved answers and restore acknowledgements hold for **0.4 seconds**, then fade out over **0.3 seconds** while you continue interacting. Success toasts use the same timing.
+The current source defaults to **swipeable cards** across Today, Clarify, Projects & Waiting, and Review. Tasks, calendar events, standalone clarification questions, projects, waiting items, review steps and history entries use the same display setting; metrics and filters stay visible. Navigate with a horizontal touch/trackpad gesture, arrow buttons, or the left/right arrow keys while the deck is focused. Switching cards preserves answer drafts, selected candidates and review checks. Completing and confirming tasks use their explicit buttons. Choose **Settings → 待办展示 → 条目列表** to keep the original list layout; the preference persists across reloads. Completion, dismissal, saved answers and restore acknowledgements hold for **0.4 seconds**, then fade out over **0.3 seconds** while you continue interacting. Success toasts use the same timing.
 
 A standalone, synthetic-data **Bilibili Toy demo** is available in [demos/toy](demos/toy/README.md). It runs without a local server API, Computer History, model calls or access to Apple apps; it shares the production card-navigation code.
 
 **Save answers and organize** first saves the answers, then immediately starts a separate model job. It does not wait for the history backlog. Each card shows progress, a reply and revised next action, or a focused follow-up question. A clearly finished/dropped local candidate can be closed; formal Reminders are never completed by model inference. Failed jobs keep their answers and offer retry. Older saved answers have an **Organize using answers** action as well.
 
-Each submitted answer batch can make an additional model call. Opening Settings, saving model preferences and browsing already-generated replies do not call a model. The v0.5.0 download includes these settings, immediate replies, source adapters, local history recall and swipeable cards.
+Each submitted answer batch can make an additional model call. Opening Settings, saving model preferences and browsing already-generated replies do not call a model. The v0.5.1 download includes these settings, immediate replies, source adapters, local history recall and swipeable cards.
 
 ## Requirements
 
-- macOS 14 or later. The prebuilt v0.5.0 app targets Apple Silicon (`arm64`).
+- macOS 14 or later. The prebuilt v0.5.1 app targets Apple Silicon (`arm64`).
 - Python 3.11 or later. A stable Homebrew Python path works with login agents.
 - Codex CLI, authenticated with your chosen model/provider, for background extraction and conversational GTD.
 - The **Computer History** plugin, enabled by you, for the current automatic activity-based adapter. Manual capture, the workbench and local Markdown memory recall can be used without a live event stream.
@@ -64,7 +64,7 @@ Xcode Command Line Tools (`xcode-select --install`) are needed only when buildin
 
 ### Download the app
 
-1. Download `Getting-Things-Done-v0.5.0-macos-arm64.zip` from the [release](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.0).
+1. Download `Getting-Things-Done-v0.5.1-macos-arm64.zip` from the [release](https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.1).
 2. Unzip and move `Getting Things Done.app` into `~/Applications` **before the first launch**.
 3. Open the app. Python 3.11+ must be installed; a Homebrew installation is detected automatically. If macOS blocks the ad-hoc-signed app, use the normal **System Settings → Privacy & Security → Open Anyway** approval for this downloaded app.
 
@@ -172,7 +172,7 @@ This produces an architecture-labelled app archive, a matching source archive an
 On a logged-in macOS desktop, verify a moved archive with synthetic data and then recheck its unchanged signature:
 
 ```bash
-python3 scripts/verify_packaged_app.py dist/Getting-Things-Done-v0.5.0-macos-arm64.zip
+python3 scripts/verify_packaged_app.py dist/Getting-Things-Done-v0.5.1-macos-arm64.zip
 ```
 
 You can select an installed browser with `--browser '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'`. The browser fixture uses synthetic state and a fake native bridge; it never writes a test task into your real lists.
