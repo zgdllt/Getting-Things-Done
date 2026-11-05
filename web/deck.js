@@ -142,10 +142,10 @@ window.TaskDeck = class TaskDeck {
       const old = this.find(id);
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (old && !reduced) {
-        // Show the receipt first, then let the acknowledged card leave.
-        await new Promise(resolve => setTimeout(resolve, 180));
+        // Let the acknowledgement pop in while the card starts moving.
+        await new Promise(resolve => setTimeout(resolve, 70));
         old.classList.add(kind === "save" ? "deck-save-out" : "deck-action-out");
-        await new Promise(resolve => setTimeout(resolve, 260));
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
       const refreshed = await refresh(result);
       if (refreshed === false) {
@@ -159,7 +159,7 @@ window.TaskDeck = class TaskDeck {
       }
       if (next && next !== old && !reduced) {
         next.classList.add("deck-action-in");
-        setTimeout(() => next.classList.remove("deck-action-in"), 300);
+        setTimeout(() => next.classList.remove("deck-action-in"), 280);
       }
       return result;
     } catch (error) {
