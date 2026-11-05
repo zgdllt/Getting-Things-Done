@@ -1,5 +1,6 @@
 """Verify carousel navigation and the standalone Toy using synthetic data only."""
 import argparse
+import datetime as dt
 import functools
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -35,6 +36,141 @@ def success_notice(page, text):
         return [style.animationDelay, style.animationDuration, style.pointerEvents];
     }""")
     assert timing == ["0.4s", "0.3s", "none"], timing
+
+
+def verify_all_views(page, state, native, artifacts):
+    """Regress the collections omitted from the original card integration."""
+    page.set_viewport_size({"width": 1360, "height": 1000})
+    with state.db:
+        for suffix in ("a", "b"):
+            state.db.execute("INSERT INTO questions VALUES(?,?,?,?,?,?,?)",
+                             ("orphan-" + suffix, None, "合成独立问题 " + suffix,
+                              "open", "", None, gtd.now()))
+            state.db.execute("INSERT INTO answer_jobs VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                             ("old-job-" + suffix, "old-fingerprint-" + suffix,
+                              json.dumps(["answered-" + suffix]), "[]", "done",
+                              gtd.now(), gtd.now(), json.dumps({"summary": "合成旧答复 " + suffix}),
+                              "", "fixture", "high"))
+    page.reload()
+    inbox = page.locator('[data-task-deck="inbox:all:"]')
+    expect(inbox.locator(".deck-counter")).to_have_text("第 1 / 4 张")
+    expect(inbox.locator("[data-question]")).to_have_count(1)
+    expect(page.locator("[data-filter=questions]")).to_have_text("有问题 3")
+    expect(page.locator("#inbox-count")).to_have_text("4")
+    history = page.locator("[data-response-history]")
+    assert not history.evaluate("node => node.open")
+    history.locator("summary").click()
+    responses = page.locator('[data-task-deck="inbox:responses:"]')
+    responses.get_by_role("button", name="下一张", exact=True).click()
+    expect(responses).to_contain_text("合成旧答复 a")
+    page.locator("[data-answer=orphan-a]").fill("合成决定 A")
+    inbox.get_by_role("button", name="下一张", exact=True).click()
+    page.locator("[data-answer=orphan-b]").fill("合成决定 B")
+    inbox.get_by_role("button", name="上一张", exact=True).click()
+    expect(page.locator("[data-answer=orphan-a]")).to_have_value("合成决定 A")
+    page.reload()
+    expect(page.locator("[data-answer=orphan-a]")).to_have_value("合成决定 A")
+    page.locator("[data-filter=ready]").click()
+    expect(page.locator("[data-question]")).to_have_count(0)
+    page.locator("[data-filter=questions]").click()
+    expect(page.locator("[data-question]")).to_have_count(1)
+    page.locator("#search").fill("合成独立问题 b")
+    expect(page.locator("[data-answer=orphan-b]")).to_have_value("合成决定 B")
+    page.locator("#search").fill("")
+    page.locator("[data-filter=all]").click()
+    page.screenshot(path=str(artifacts/"cards-orphan-questions.png"), full_page=True)
+    # Keep an old result selected, then save a new standalone job. It must
+    # immediately become visible without invoking the model worker.
+    history.locator("summary").click()
+    responses.get_by_role("button", name="下一张", exact=True).click()
+    saved = []
+    def save(route):
+        items = route.request.post_data_json["items"]
+        saved.extend(items)
+        route.fulfill(json=web.save_answers(state, items))
+    page.route("**/api/answers", save)
+    held = []
+    page.route("**/api/state", lambda route: held.append((route, route.fetch())))
+    page.locator("#save-answers").click()
+    page.wait_for_timeout(350)
+    assert held, "Saving must reach the delayed state refresh"
+    responses.get_by_role("button", name="上一张", exact=True).click()
+    expect(responses).to_contain_text("合成旧答复 b")
+    for route, response in held:
+        route.fulfill(response=response)
+    page.unroute("**/api/state")
+    expect(responses.get_by_role("heading")).to_have_text("答复已保存，正在整理")
+    assert {item["key"] for item in saved} == {"orphan-a", "orphan-b"}
+    expect(page.locator("[data-question]")).to_have_count(0)
+    success_notice(page, "答复已保存")
+    page.unroute("**/api/answers")
+
+    for index in range(2):
+        for bucket, project in (("project", "合成项目 " + str(index)), ("waiting", "")):
+            title = ("合成等待 " if bucket == "waiting" else "合成项目行动 ") + str(index)
+            key = gtd.capture(state, title, bucket, project)["candidate_key"]
+            target = "target-" + key
+            with state.db:
+                state.db.execute("UPDATE candidates SET state='accepted',target_id=? WHERE key=?", (target, key))
+            native["reminders"].append({"id": target, "title": title, "list": "验证", "completed": False})
+        gtd.capture(state, "合成待确认想法 " + str(index), "project")
+        with state.db:
+            state.db.execute("INSERT INTO batches VALUES(?,?,?,?,?,?)",
+                             ("fixture-batch-" + str(index), gtd.now(), "done", None,
+                              "合成历史摘要 " + str(index), ""))
+    tomorrow = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date() + dt.timedelta(days=1)
+    native["events"] = [
+        {"id": "recurring-series", "title": "重复日程 " + str(index), "calendar": "验证",
+         "start": f"{tomorrow}T{10 + index}:00:00+08:00",
+         "end": f"{tomorrow}T{11 + index}:00:00+08:00", "all_day": False}
+        for index in range(2)]
+    gtd.atomic_json(state.base/"last-snapshot.json", native)
+    page.evaluate("load()")
+    expect(page.locator("#toast")).to_be_hidden()
+    page.locator("nav [data-view=projects]").click()
+    for identifier in ("confirmed", "waiting", "ideas"):
+        deck = page.locator(f'[data-task-deck="projects:{identifier}:"]')
+        expect(deck.locator(".deck-counter")).to_have_text("第 1 / 2 张")
+        deck.get_by_role("button", name="下一张", exact=True).click()
+        expect(deck.locator(".deck-counter")).to_have_text("第 2 / 2 张")
+    page.evaluate("load()")
+    expect(page.locator('[data-task-deck="projects:confirmed:"] .deck-counter')).to_have_text("第 2 / 2 张")
+    page.screenshot(path=str(artifacts/"cards-projects-desktop.png"), full_page=True)
+    page.locator("nav [data-view=today]").click()
+    events = page.locator('[data-task-deck="today:events:"]')
+    events.get_by_role("button", name="下一张", exact=True).click()
+    expect(events).to_contain_text("重复日程 1")
+    page.locator("nav [data-view=review]").click()
+    steps = page.locator('[data-task-deck="review:steps:"]')
+    steps.get_by_role("button", name="下一张", exact=True).click()
+    page.locator("[data-check=calendar]").check()
+    page.locator("nav [data-view=projects]").click()
+    page.locator("nav [data-view=review]").click()
+    expect(page.locator("[data-check=calendar]")).to_be_checked()
+    events = page.locator('[data-task-deck="review:events:"]')
+    events.get_by_role("button", name="下一张", exact=True).click()
+    expect(events).to_contain_text("重复日程 1")
+    batches = page.locator('[data-task-deck="review:history:"]')
+    batches.get_by_role("button", name="下一张", exact=True).click()
+    expect(batches.locator(".deck-counter")).to_have_text("第 2 / 2 张")
+    page.screenshot(path=str(artifacts/"cards-review-desktop.png"), full_page=True)
+    for view in ("inbox", "projects", "review"):
+        page.locator(f"nav [data-view={view}]").click()
+        page.set_viewport_size({"width": 390, "height": 844})
+        assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), view
+    page.screenshot(path=str(artifacts/"cards-review-mobile.png"), full_page=True)
+    page.locator("#app-settings").click()
+    page.locator("input[value=list]").check()
+    page.get_by_role("button", name="保存展示设置").click()
+    for view in ("inbox", "projects", "review"):
+        page.locator(f"nav [data-view={view}]").click()
+        expect(page.locator("[data-task-deck]")).to_have_count(0)
+    expect(page.locator("[data-check]")).to_have_count(4)
+    expect(page.locator("[data-check=calendar]")).to_be_checked()
+    page.locator("#app-settings").click()
+    page.locator("input[value=cards]").check()
+    page.get_by_role("button", name="保存展示设置").click()
+    expect(page.locator("[data-task-deck]")).to_have_count(3)
 
 
 def run(artifacts, browser_executable=None):
@@ -174,7 +310,7 @@ def run(artifacts, browser_executable=None):
                 expect(page.locator(".focus-task-title")).to_have_text(title)
                 page.unroute("**/api/state")
                 page.evaluate("load()")
-                assert page.locator(".focus-task-title").inner_text() != title
+                expect(page.locator(".focus-task-title")).not_to_have_text(title)
 
                 # Exercise the private client's other feedback paths with
                 # synthetic API success replies; no model or native writes.
@@ -190,6 +326,7 @@ def run(artifacts, browser_executable=None):
                 expect(page.locator(".deck-receipt")).to_contain_text("已忽略")
                 success_notice(page, "已忽略")
                 page.unroute("**/api/dismiss")
+                verify_all_views(page, state, native, artifacts)
                 assert not native_calls.called
 
                 demo = browser.new_page(viewport={"width": 1200, "height": 960})
@@ -306,7 +443,9 @@ def run(artifacts, browser_executable=None):
                                             "action-feedback", "action-transitions", "action-failure-stays",
                                             "shared-success-timing", "save-dismiss-restore-feedback",
                                             "success-toast-restart", "error-toast-persists", "reduced-motion",
-                                            "confirmed-write-refresh-failure"],
+                                            "confirmed-write-refresh-failure", "orphan-question-cards",
+                                            "standalone-job-focus", "all-view-cards-and-lists",
+                                            "recurring-event-identity", "review-step-retention"],
                               "artifacts": str(artifacts)}, ensure_ascii=False))
         finally:
             server.shutdown(); server.server_close(); serving.join()
