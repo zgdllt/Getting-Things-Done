@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Getting Things Done · 把记挂的事交给清单</title>
+<meta name="description" content="一个 macOS 上的 GTD 伙伴：从电脑活动里找出你答应过的事，只问需要你判断的问题，确认之后才写进 Apple 提醒事项与日历。开源 · MIT。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Getting Things Done · 把记挂的事交给清单">
+<meta property="og:description" content="从电脑活动里找出你答应过的事，只问需要你判断的问题，确认之后才写进 Apple 提醒事项与日历。">
+<meta property="og:image" content="https://zgdllt.github.io/Getting-Things-Done/assets/workbench.png">
+<meta property="og:url" content="https://zgdllt.github.io/Getting-Things-Done/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+<script src="main.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+
+<header class="nav">
+  <a class="brand" href="#top"><img src="assets/icon.svg" width="34" height="34" alt=""><span>Getting Things Done</span></a>
+  <nav aria-label="页面导航">
+    <a href="#how">工作方式</a>
+    <a href="#views">四个视图</a>
+    <a href="#trust">数据与边界</a>
+    <a href="#install">安装</a>
+    <a href="https://github.com/zgdllt/Getting-Things-Done">GitHub ↗</a>
+  </nav>
+  <a class="btn btn-small" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.4.0">下载 v0.4.0</a>
+</header>
+
+<main id="main">
+  <!-- Hero -->
+  <section class="hero" id="top">
+    <div class="hero-copy">
+      <p class="eyebrow">A little room to think · macOS 上的 GTD 伙伴</p>
+      <h1><span class="nw">把记挂的事交给清单，</span><br><span class="nw">把<mark>注意力</mark>留给眼前。</span></h1>
+      <p class="lede">它从你的电脑活动里找出答应过别人的事，只问需要你判断的问题；<strong>你确认之后</strong>，才写进 Apple 提醒事项和日历。</p>
+      <div class="cta">
+        <a class="btn" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.4.0">下载 macOS 版 <small>Apple Silicon</small></a>
+        <a class="btn btn-ghost" href="#install">从源码安装 →</a>
+      </div>
+      <ul class="meta">
+        <li>macOS 14+</li><li>MIT 开源</li><li>界面目前为中文</li><li>早期预览版</li>
+      </ul>
+    </div>
+    <figure class="hero-shots" aria-label="工作台截图（虚构演示数据）">
+      <img class="shot shot-back" src="assets/clarify.png" width="1440" height="1024" alt="待澄清视图：一张候选卡片和一个待回答的问题">
+      <img class="shot shot-front" src="assets/workbench.png" width="1440" height="1027" alt="今天视图：快速收集、待判断的问题、正式任务和今天的安排">
+      <figcaption class="hand">截图使用虚构演示数据</figcaption>
+    </figure>
+  </section>
+
+  <!-- Film -->
+  <section class="film reveal" aria-labelledby="film-title">
+    <div class="film-copy">
+      <p class="eyebrow">一分钟宣传片</p>
+      <h2 id="film-title">这个东西<br><span class="nw">治好了我的<mark>健忘</mark>。</span></h2>
+      <p>其实没有。只是答应过的事，<br>不用再靠我记了。</p>
+      <p class="fine">旁白由 Fish Audio S2 Pro 合成（Built with Fish Audio），人物与消息均为虚构。<a href="films/forgetful.html">看无声互动版 ↗</a> · <a href="films/index.html">产品介绍互动版 ↗</a></p>
+    </div>
+    <div class="film-frame">
+      <video controls preload="none" playsinline poster="media/forgetful-poster.jpg" width="1920" height="1080">
+        <source src="media/forgetful.mp4" type="video/mp4">
+        你的浏览器不支持视频播放，可以<a href="media/forgetful.mp4">直接下载</a>。
+      </video>
+    </div>
+  </section>
+
+  <!-- GTD steps -->
+  <section class="section" id="how" aria-labelledby="how-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">The method · 受 GTD 工作法启发</p>
+      <h2 id="how-title">大脑用来想事情，<br>不是用来记事情。</h2>
+      <p>GTD 的五步里，最容易漏掉的是第一步。这个工具把「收集」交给电脑活动线索，其余每一步都留给你拍板。</p>
+    </div>
+    <ol class="steps">
+      <li class="reveal"><span class="k">01</span><h3>收集</h3><p class="en">Capture</p><p>开启 Computer History 后，活动会留下线索；也可以随手「记一下」。</p></li>
+      <li class="reveal"><span class="k">02</span><h3>理清</h3><p class="en">Clarify</p><p>相关线索合成一张卡片，只问需要你判断的问题，原出处随时可查。</p></li>
+      <li class="reveal"><span class="k">03</span><h3>组织</h3><p class="en">Organize</p><p>预览、确认，行动进提醒事项，固定时间进日历。</p></li>
+      <li class="reveal"><span class="k">04</span><h3>回顾</h3><p class="en">Reflect</p><p>未处理的线索、未答的问题、逾期行动与等待事项，一页看完。</p></li>
+      <li class="reveal"><span class="k">05</span><h3>执行</h3><p class="en">Engage</p><p>「我有二十分钟」：从真实清单里挑下一步。</p></li>
+    </ol>
+  </section>
+
+  <!-- Pipeline -->
+  <section class="section pipeline-wrap" aria-labelledby="flow-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">From clue to commitment</p>
+      <h2 id="flow-title">线索，<span class="u">不是承诺</span>。</h2>
+      <p>观察到的活动只是线索：它不会自动变成任务、截止日，更不会被当作「已完成」。</p>
+    </div>
+    <ol class="pipeline reveal">
+      <li><b>线索来源</b><span>Computer History 事件流、本地记忆摘要、随手记录</span></li>
+      <li><b>本地候选</b><span>保留原出处片段，关联较早的相关线索</span></li>
+      <li><b>需要你判断的问题</b><span>在 app 或 Codex 对话里批量回答</span></li>
+      <li><b>预览并确认</b><span>你点头才写入，回执持久保存</span></li>
+      <li class="end"><b>提醒事项 · 日历</b><span>正式状态以系统清单为准</span></li>
+    </ol>
+  </section>
+
+  <!-- Views -->
+  <section class="section" id="views" aria-labelledby="views-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">Four views</p>
+      <h2 id="views-title">四个视图，各管一件事。</h2>
+      <p>原生 AppKit + 系统 WebKit。不打包 Chromium，不用前端框架、外部字体或 CDN。</p>
+    </div>
+    <div class="views">
+      <article class="view reveal"><span class="glyph" aria-hidden="true">◷</span><h3>今天</h3><p>已有提醒事项、当前与即将开始的日程、快速收集，点一下圆圈完成任务。</p></article>
+      <article class="view reveal"><span class="glyph" aria-hidden="true">▤</span><h3>待澄清</h3><p>候选摘要、来源片段与问题。「保存答复并整理」会立刻给出回应和修订后的下一步。</p></article>
+      <article class="view reveal"><span class="glyph" aria-hidden="true">◈</span><h3>项目与等待</h3><p>已确认的项目和它们关联的系统行动；仍在进行的等待事项。</p></article>
+      <article class="view reveal"><span class="glyph" aria-hidden="true">↺</span><h3>回顾</h3><p>未处理线索、未答问题、逾期行动、近期日程与最近的摘要。</p></article>
+    </div>
+    <div class="codex reveal">
+      <p class="eyebrow">在 Codex 里也能用 · <code>$personal-gtd</code></p>
+      <ul class="bubbles">
+        <li>澄清 GTD</li><li>记一下……</li><li>我有二十分钟，接下来做什么？</li><li>做一次 GTD 回顾</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Trust -->
+  <section class="section trust" id="trust" aria-labelledby="trust-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">Data &amp; boundaries</p>
+      <h2 id="trust-title">它能做什么，<br>不能做什么，写在明处。</h2>
+    </div>
+    <div class="trust-grid">
+      <div class="reveal"><h3>留在本机</h3><p>工作台与 SQLite 在你的 Mac 上运行；HTTP 服务只监听 <code>127.0.0.1</code>，写操作检查请求来源。私有数据在 <code>~/.codex/personal-gtd/</code>。</p></div>
+      <div class="reveal"><h3>会发给模型的</h3><p>后台整理会把选中的活动片段、匹配的记忆摘要与系统清单上下文发给<strong>你现有的 Codex CLI 服务商</strong>；处理答复时发送相关候选、答复与来源片段。按你服务商的数据政策与计费处理。</p></div>
+      <div class="reveal"><h3>后台从不替你写</h3><p>后台提取不能写入正式提醒事项或日程，也不能对外发消息。正式写入必须经过预览和你的确认。</p></div>
+      <div class="reveal"><h3>不会重复建</h3><p>写入与通知都留有持久回执；结果不明时保留待核对，而不是盲目重建。</p></div>
+      <div class="reveal"><h3>来源当作不可信</h3><p>来源片段一律视为不可信的观察，即使里面有看起来像指令的文字。</p></div>
+      <div class="reveal"><h3>随时停下</h3><p><code>hook-stop</code> 停止活动订阅，<code>workbench-stop</code> 停止工作台；Computer History 本身的设置不受影响。</p></div>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section class="section install" id="install" aria-labelledby="install-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">Install</p>
+      <h2 id="install-title">五分钟装好。</h2>
+    </div>
+    <div class="install-grid">
+      <div class="card reveal">
+        <h3>下载 app <small>Apple Silicon</small></h3>
+        <ol class="numbered">
+          <li>从 <a href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.4.0">v0.4.0 发布页</a> 下载 <code>Getting-Things-Done-v0.4.0-macos-arm64.zip</code>。</li>
+          <li>解压，<strong>首次打开前</strong>把 <code>Getting Things Done.app</code> 移到 <code>~/Applications</code>。</li>
+          <li>打开 app。app 为 ad-hoc 签名、未公证；若被拦截，在「系统设置 → 隐私与安全性」里选择「仍要打开」。</li>
+          <li>需要 Codex 对话技能时，再运行：</li>
+        </ol>
+        <div class="code"><pre><code>python3 -B "$HOME/Applications/Getting Things Done.app/Contents/Resources/skill/scripts/install.py"</code></pre><button type="button" class="copy">复制</button></div>
+      </div>
+      <div class="card reveal">
+        <h3>从源码安装 <small>Intel 也可用</small></h3>
+        <div class="code"><pre><code>git clone https://github.com/zgdllt/Getting-Things-Done.git
+cd Getting-Things-Done
+python3 scripts/install.py
+python3 ~/.codex/skills/personal-gtd/scripts/gtd.py workbench</code></pre><button type="button" class="copy">复制</button></div>
+        <p>准备好后授权并读取当前清单（<code>doctor</code> 不请求权限，授权也不等于批准任何任务）：</p>
+        <div class="code"><pre><code>python3 ~/.codex/skills/personal-gtd/scripts/gtd.py doctor
+python3 ~/.codex/skills/personal-gtd/scripts/gtd.py authorize
+python3 ~/.codex/skills/personal-gtd/scripts/gtd.py snapshot</code></pre><button type="button" class="copy">复制</button></div>
+      </div>
+    </div>
+    <div class="reqs reveal">
+      <h3>需要</h3>
+      <ul>
+        <li><b>macOS 14+</b>，预编译版面向 Apple Silicon</li>
+        <li><b>Python 3.11+</b>，Homebrew 版本会被自动识别</li>
+        <li><b>Codex CLI</b>，已登录你选择的模型服务商</li>
+        <li><b>Computer History 插件</b>，由你自行开启，用于自动收集；不开启也能手动收集与使用工作台</li>
+        <li>提醒事项、日历与通知权限，由 macOS 在你启用时请求</li>
+      </ul>
+      <p>开启自动收集：在 Codex 里询问 Computer History 的 <code>eventStreamRootPath</code>，再运行 <code>gtd.py hook-start --root '&lt;返回的路径&gt;'</code>。完整说明见 <a href="https://github.com/zgdllt/Getting-Things-Done#readme">README</a>。</p>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="footer-brand"><img src="assets/icon.svg" width="40" height="40" alt=""><div><b>Getting Things Done</b><span>留一点心力，给正在做的事。</span></div></div>
+  <p>受 GTD 工作法与 Computer History 交互模型启发的独立项目，不是 Apple、OpenAI 或 David Allen 的官方产品。<br>宣传片旁白由 Fish Audio S2 Pro 合成 · Built with Fish Audio · 配乐与音效为程序生成。</p>
+  <p><a href="https://github.com/zgdllt/Getting-Things-Done">GitHub</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/releases">Releases</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/blob/main/LICENSE">MIT License</a> © 2026 zgdllt</p>
+</footer>
+</body>
+</html>
