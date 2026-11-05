@@ -95,7 +95,7 @@ async function itemAction(item, action) {
   try {
     await deck.act({
       id:state.view + ":" + state.query, pending:messages[0], success:messages[1],
-      kind:action === "save" ? "save" : "advance"
+      kind:action === "save" ? "save" : "advance", completion:action === "complete"
     }, () => {
       if (action === "complete") item.state = "done";
       if (action === "restore") item.state = "today";

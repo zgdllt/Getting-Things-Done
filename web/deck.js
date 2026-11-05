@@ -121,7 +121,26 @@ window.TaskDeck = class TaskDeck {
     }
   }
 
-  async act({id, pending, success, kind = "advance", origin}, operation, refresh = this.onChange) {
+  holdCompletion(badge, bounds) {
+    if (!badge || !bounds?.width) return;
+    this.heldCompletion?.remove();
+    const notice = badge.cloneNode(true);
+    notice.className = "deck-completion-notice";
+    notice.setAttribute("aria-hidden", "true");
+    notice.style.left = bounds.left + "px";
+    notice.style.top = bounds.top + "px";
+    notice.style.width = bounds.width + "px";
+    document.body.append(notice);
+    this.heldCompletion = notice;
+    setTimeout(() => {
+      notice.remove();
+      if (this.heldCompletion === notice) this.heldCompletion = null;
+    }, 1200);
+  }
+
+  async act({id, pending, success, kind = "advance", origin, completion = false}, operation, refresh = this.onChange) {
+    this.heldCompletion?.remove();
+    this.heldCompletion = null;
     const original = this.find(id);
     // List rows retain their independent request lifecycles.
     if (!original) {
@@ -140,6 +159,7 @@ window.TaskDeck = class TaskDeck {
       this.feedback.set(id, {type:"success", text:typeof success === "function" ? success(result) : success});
       this.paintFeedback(id);
       const old = this.find(id);
+      const badge = completion ? old?.querySelector('.deck-action-overlay>[data-phase="success"]') : null;
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (old && !reduced) {
         // Let the acknowledgement pop in while the card starts moving.
@@ -147,6 +167,7 @@ window.TaskDeck = class TaskDeck {
         old.classList.add(kind === "save" ? "deck-save-out" : "deck-action-out");
         await new Promise(resolve => setTimeout(resolve, 150));
       }
+      const badgeBounds = badge?.getBoundingClientRect();
       const refreshed = await refresh(result);
       if (refreshed === false) {
         this.feedback.set(id, {type:"success", text:"操作已保存，页面待同步；可点刷新重试。"});
@@ -161,6 +182,7 @@ window.TaskDeck = class TaskDeck {
         next.classList.add("deck-action-in");
         setTimeout(() => next.classList.remove("deck-action-in"), 280);
       }
+      if (completion) this.holdCompletion(badge, badgeBounds);
       return result;
     } catch (error) {
       this.actions.delete(id);
