@@ -52,6 +52,31 @@ class GTDTests(unittest.TestCase):
         self.events.unlink()
         self.assertEqual(len(json.loads(self.pending()[0]["payload"])),1)
 
+    def test_memory_summary_replaces_covered_raw_event_and_recalls_older_clue(self):
+        memory_root = self.root / "memories"
+        resources = memory_root / "resources"
+        resources.mkdir(parents=True)
+        (resources / "2026-11-03T16-20-00-now1-10min-current.md").write_text(
+            "---\ntitle: 当前开发\n---\n\n当前正在处理回复导师的下一步。", encoding="utf-8")
+        (resources / "2026-10-31T16-20-00-old1-10min-history.md").write_text(
+            "---\ntitle: 旧的导师跟进\n---\n\n之前还记过回复导师并核对实验结果。", encoding="utf-8")
+        config = {"memory_root": str(memory_root), "memory_source_enabled": True, "timezone": "UTC"}
+        raw = gtd.project_event(self.event(), self.events, 0)
+        records = gtd.gtd_sources.analysis_records(raw, config)
+        self.assertTrue(any(item["source_type"] == "computer_history_memory" for item in records))
+        self.assertTrue(any(item["source_type"] == "computer_history_memory_retro" for item in records))
+        self.assertFalse(any(item.get("source_type") == "computer_history_event" for item in records))
+        self.assertTrue(any("回复导师" in item["text"] for item in records
+                            if item["source_type"] == "computer_history_memory_retro"))
+
+    def test_timezone_defaults_to_system_and_invalid_config_falls_back(self):
+        expected = gtd.gtd_sources.local_timezone_name()
+        self.assertEqual(gtd.gtd_sources.timezone_name({}), expected)
+        self.assertEqual(gtd.gtd_sources.timezone_name({"timezone": "Not/AZone"}), expected)
+        with patch.object(gtd.gtd_sources, "local_timezone_name", return_value="America/Los_Angeles"):
+            self.assertEqual(gtd.gtd_sources.timezone_name({"timezone": "Asia/Shanghai"}), "America/Los_Angeles")
+            self.assertEqual(gtd.gtd_sources.timezone_name({"timezone": "Asia/Shanghai", "timezone_source": "user"}), "Asia/Shanghai")
+
     def test_same_inode_rewrite_is_not_silently_skipped(self):
         old = json.dumps(self.event(1,"OLD"))
         new = json.dumps(self.event(2,"NEW"))

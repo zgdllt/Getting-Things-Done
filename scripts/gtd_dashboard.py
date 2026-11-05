@@ -22,6 +22,7 @@ from zoneinfo import ZoneInfo
 import gtd
 import gtd_clarify
 import gtd_models
+import gtd_sources
 
 LABEL = "local.codex.personal-gtd.workbench"
 WEB = gtd.SKILL / "web"
@@ -42,11 +43,15 @@ def open_url(base, view="today"):
 
 def dashboard_state(state):
     native = read_json(state.base / "last-snapshot.json", {})
+    config = state.config()
     candidates = state.rows("SELECT * FROM candidates ORDER BY created_at DESC")
     for item in candidates:
         evidence = json.loads(item.pop("evidence"))
         # Full observations can contain entire app trees. The UI gets source excerpts only.
         item["sources"] = [{"timestamp": entry.get("timestamp"), "app": entry.get("app", {}).get("name", ""),
+                            "source_type": entry.get("source_type", "computer_history_event"),
+                            "memory_window": entry.get("memory_window", ""),
+                            "retrieval_terms": entry.get("retrieval_terms", []),
                             "title": entry.get("window", {}).get("title", ""),
                             "url": entry.get("window", {}).get("url", ""),
                             "text": entry.get("text", "")[:1600]} for entry in evidence[-3:]]
@@ -71,8 +76,9 @@ def dashboard_state(state):
     resolutions = {row["candidate_key"]: row for row in state.rows("SELECT * FROM candidate_resolutions")}
     for candidate in candidates:
         candidate["resolution"] = resolutions.get(candidate["key"])
-    return {"ok": True, "at": gtd.now(), "timezone": state.config().get("timezone", "Asia/Shanghai"),
+    return {"ok": True, "at": gtd.now(), "timezone": gtd_sources.timezone_name(config),
             "model_settings": gtd_models.selection(state), "answer_jobs": jobs,
+            "source_status": gtd_sources.status(config),
             "snapshot": native,
             "snapshot_status": read_json(state.base / "snapshot-status.json", {"ok": False, "error": "尚未读取系统清单"}),
             "hook": hook,

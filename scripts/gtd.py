@@ -21,9 +21,9 @@ import sys
 import time
 import tomllib
 import uuid
-from zoneinfo import ZoneInfo
 
 import gtd_models
+import gtd_sources
 
 HERE = Path(__file__).resolve().parent
 SKILL = HERE.parent
@@ -239,69 +239,13 @@ def snapshot(state, past=7, future=14):
 
 
 def project_event(event, path, offset):
-    """Preserve action-relevant observed fields; split long text without silently losing it."""
-    app, window = event.get("app", {}), event.get("window", {})
-    portions = []
-    for name in ("keyboard", "ax", "selection", "mouse"):
-        part = event.get(name)
-        if isinstance(part, dict):
-            for field in ("text", "target"):
-                value = part.get(field)
-                if value:
-                    portions.append(value if isinstance(value, str) else encode(value))
-    text = "\n".join(dict.fromkeys(portions))
-    if not text and not window:
-        return []
-    key = str(path) + ":" + str(event.get("id", offset))
-    base = {"event_key": key, "timestamp": event.get("timestamp"), "kind": event.get("kind"),
-            "app": app, "window": window}
-    pieces = [text[i:i + 12000] for i in range(0, len(text), 12000)] or [""]
-    return [{**base, "text": part, "part": i + 1, "parts": len(pieces),
-             "event_key": key + (f"#part{i+1}" if len(pieces) > 1 else "")}
-            for i, part in enumerate(pieces)]
+    return gtd_sources.project_event(event, path, offset)
 
 
 def spool(state, root, baseline=False):
-    root = Path(root).expanduser().resolve()
-    if not (root / "segments").is_dir():
-        raise RuntimeError("Computer History segments directory is unavailable")
-    records, cursors, malformed = [], [], 0
-    source_times = []
-    for path in sorted((root / "segments").glob("*/events.jsonl")):
-        stat = path.stat()
-        saved = state.db.execute("SELECT inode,offset,signature FROM cursors WHERE path=?", (str(path),)).fetchone()
-        offset = saved["offset"] if saved and saved["inode"] == stat.st_ino and saved["offset"] <= stat.st_size else 0
-        with path.open("rb") as f:
-            def signature(position):
-                f.seek(0)
-                head = f.read(min(position, 256))
-                f.seek(max(0, position-256))
-                return hashlib.sha256(head+f.read(min(position, 256))).hexdigest()
-            if offset and saved["signature"] and signature(offset) != saved["signature"]:
-                offset = 0
-            if baseline and saved is None:
-                data = f.read()
-                offset = data.rfind(b"\n") + 1
-            f.seek(offset)
-            while not baseline:
-                start = f.tell()
-                line = f.readline()
-                if not line or not line.endswith(b"\n"):
-                    f.seek(start)
-                    break
-                offset = f.tell()
-                try:
-                    event = json.loads(line)
-                    if not isinstance(event, dict):
-                        raise ValueError("Not an object")
-                except (ValueError, UnicodeDecodeError):
-                    malformed += 1
-                    continue
-                if isinstance(event.get("timestamp"), str):
-                    source_times.append(event["timestamp"])
-                records.extend(project_event(event, path, start))
-            checkpoint = signature(offset)
-        cursors.append((str(path), stat.st_ino, offset, checkpoint))
+    adapter = gtd_sources.history_adapter(state.config())
+    collected = adapter.collect(state, root, baseline)
+    records, cursors = collected["records"], collected["cursors"]
     batches, chunk, size = [], [], 0
     for record in records:
         record_size = len(encode(record))
@@ -318,9 +262,11 @@ def spool(state, root, baseline=False):
             state.db.execute("INSERT INTO batches VALUES(?,?,?,?,?,?)",
                              (uuid.uuid4().hex, now(), "pending", encode(batch), "", ""))
         state.db.executemany("INSERT OR REPLACE INTO cursors(path,inode,offset,signature) VALUES(?,?,?,?)", cursors)
-    return {"batches": len(batches), "records": len(records), "malformed_lines": malformed,
-            "first_event_at": min(source_times) if source_times else None,
-            "latest_event_at": max(source_times) if source_times else None}
+    return {"batches": len(batches), "records": len(records),
+            "malformed_lines": collected["malformed_lines"],
+            "first_event_at": collected["first_event_at"],
+            "latest_event_at": collected["latest_event_at"],
+            "source_adapter": adapter.name, "source_schema": adapter.schema}
 
 
 def validate_analysis(value, events):
@@ -445,8 +391,12 @@ def analyze(state, events):
     questions = state.rows("SELECT key,candidate_key,question,state,answer FROM questions")
     native_path = state.base / "last-snapshot.json"
     system = json.loads(native_path.read_text()) if native_path.exists() else {}
+    config = state.config()
+    timezone = gtd_sources.timezone_name(config)
+    analysis_events = gtd_sources.analysis_records(events, config)
     context = {
-        "now": dt.datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(),
+        "now": dt.datetime.now(gtd_sources.ZoneInfo(timezone)).isoformat(),
+        "timezone": timezone,
         "existing_candidates": current, "existing_questions": questions,
         "system_permissions": system.get("permissions", {}),
         "snapshot_generated_at": system.get("generated_at"),
@@ -456,14 +406,16 @@ def analyze(state, events):
                                for item in system.get("reminders", [])],
         "existing_calendar_events": [{key: item.get(key) for key in ("id","event_id","title","calendar","start","end","all_day")}
                                      for item in system.get("events", [])],
-        "events": events,
+        "source_status": gtd_sources.status(config),
+        "raw_event_count": len(events),
+        "events": analysis_events,
     }
     prompt = (SKILL / "references" / "extractor.md").read_text() + "\n\nOBSERVED_DATA_JSON:\n" + encode(context)
     command = extractor_command(state)
     value = run_extractor(state, command, prompt)
     # An answer saved while history was being analyzed invalidates its old suggestions.
     value["_candidate_versions"] = {item["key"]: item["updated_at"] for item in current}
-    return validate_analysis(value, events)
+    return validate_analysis(value, analysis_events)
 
 
 def run_extractor(state, command, prompt, record="last-extractor.json"):
@@ -643,20 +595,8 @@ def history_window(state, root, since, until):
     start, end = parsed(since), parsed(until)
     if end <= start:
         raise ValueError("History end must be after start")
-    events, available = [], []
-    for path in sorted((Path(root)/"segments").glob("*/events.jsonl")):
-        with path.open() as stream:
-            for offset, line in enumerate(stream):
-                if not line.endswith("\n"):
-                    continue
-                try:
-                    event = json.loads(line)
-                    timestamp = parsed(event["timestamp"])
-                except (ValueError, KeyError, TypeError):
-                    continue
-                available.append(timestamp)
-                if start <= timestamp < end:
-                    events += project_event(event, path, offset)
+    adapter = gtd_sources.history_adapter(state.config())
+    events, available = adapter.window(root, start, end)
     output_path = state.base/"history-window.json"
     atomic_json(output_path, {"requested_start": since, "requested_end": until,
         "available_start": min(available).isoformat() if available else None,
@@ -769,8 +709,17 @@ def install_hook(state, root):
         config = state.config()
         first_enable = config.get("history_root") != root
         baseline = spool(state, root, baseline=first_enable)
-        config.update({"history_root": root, "coalesce_seconds": config.get("coalesce_seconds", 60),
-                       "timezone": "Asia/Shanghai"})
+        legacy_timezone = config.get("timezone") == "Asia/Shanghai" and "timezone_source" not in config
+        timezone_source = config.get("timezone_source")
+        if timezone_source is None:
+            timezone_source = "system" if legacy_timezone or not config.get("timezone") else "user"
+        config.update({"history_root": root,
+                       "history_source": config.get("history_source", "computer_history"),
+                       "coalesce_seconds": config.get("coalesce_seconds", 60),
+                       "timezone": gtd_sources.local_timezone_name() if legacy_timezone or not config.get("timezone")
+                       else config["timezone"],
+                       "timezone_source": timezone_source,
+                       "memory_source_enabled": config.get("memory_source_enabled", True)})
         atomic_json(state.base / "config.json", config)
     plist = Path.home() / "Library" / "LaunchAgents" / (LABEL + ".plist")
     plist.parent.mkdir(parents=True, exist_ok=True)

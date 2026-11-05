@@ -6,7 +6,7 @@
 
 A personal GTD companion for macOS: turn activity clues into a small clarification queue, then decide what belongs in your actual task list.
 
-**Native WKWebView app · Codex skill · Apple Reminders & Calendar · Computer History**
+**Native WKWebView app · Codex skill · Apple Reminders & Calendar · pluggable clue sources**
 
 The interface is currently in Chinese. This is an early preview built for local use.
 
@@ -19,11 +19,12 @@ The interface is currently in Chinese. This is an early preview built for local 
 ## The workflow
 
 ```text
-Computer History events → local candidates + source evidence
-                       → questions that need your judgment
-                       → batch clarification in the app or Codex
-                       → preview and explicit confirmation
-                       → Apple Reminders / Calendar
+clue source adapters → local candidates + source evidence
+                    → memory summaries and related older clues
+                    → questions that need your judgment
+                    → batch clarification in the app or Codex
+                    → preview and explicit confirmation
+                    → Apple Reminders / Calendar
 ```
 
 Observed activity is a clue. It does not automatically become a commitment, a deadline, or proof of completion.
@@ -50,7 +51,7 @@ Each submitted answer batch can make an additional model call. Opening Settings,
 - macOS 14 or later. The prebuilt v0.3.0 app targets Apple Silicon (`arm64`).
 - Python 3.11 or later. A stable Homebrew Python path works with login agents.
 - Codex CLI, authenticated with your chosen model/provider, for background extraction and conversational GTD.
-- The **Computer History** plugin, enabled by you, for automatic activity-based capture. Manual capture and the workbench can be used without its event stream.
+- The **Computer History** plugin, enabled by you, for the current automatic activity-based adapter. Manual capture, the workbench and local Markdown memory recall can be used without a live event stream.
 - Calendar, Reminders and notification permissions are granted through macOS when you choose to enable them.
 
 Xcode Command Line Tools (`xcode-select --install`) are needed only when building from source. The prebuilt app includes the native EventKit bridge and uses the Python installed on your Mac. It is ad-hoc signed, not notarized.
@@ -104,7 +105,9 @@ In Codex, ask the Computer History plugin for its current status and `eventStrea
 python3 ~/.codex/skills/personal-gtd/scripts/gtd.py hook-start --root '/path/from/eventStreamRootPath'
 ```
 
-The subscriber watches local event-file changes with FSEvents. It does not modify Computer History settings or register an official plugin hook. On first connection it starts at the complete-record tail; restarting the same source collects new records from downtime. New events are coalesced into durable batches before model extraction.
+The subscriber watches local event-file changes with FSEvents. It does not modify Computer History settings or register an official plugin hook. On first connection it starts at the complete-record tail; restarting the same source collects new records from downtime. New events are coalesced into durable batches before model extraction. The source is isolated behind `scripts/gtd_sources.py`, so a future browser, quick-capture or self-developed local recorder can provide normalized records without changing the GTD clarification and native-write layers.
+
+When available, `~/.codex/memories/extensions/skysight/resources/` is used as a second local source. A time-matching 10-minute or 6-hour Markdown summary replaces the covered raw events in the model input. Current activity also retrieves up to four older summaries with concrete term overlap and labels them as historical context. These records can suggest a connection to an older thread, but they still require clarification and confirmation before any formal write.
 
 To use it in Codex, invoke `$personal-gtd`, or say:
 
@@ -115,7 +118,7 @@ To use it in Codex, invoke `$personal-gtd`, or say:
 
 ## Data and model use
 
-The workbench and SQLite store run locally. **Background extraction sends selected observed activity, existing candidates and system-list context to your existing Codex CLI provider, using GTD's selected model and reasoning settings. Answer processing sends the relevant candidate, saved answers and source excerpts to that same provider.** Model use follows your own provider's data handling and billing. Credentials remain in your existing Codex configuration/credential store; this project does not copy them.
+The workbench and SQLite store run locally. **Background extraction sends selected observed activity, matching local memory summaries, older related summaries and system-list context to your existing Codex CLI provider, using GTD's selected model and reasoning settings. When a memory summary covers an interval, the covered raw activity is kept out of that model request. Answer processing sends the relevant candidate, saved answers and source excerpts to that same provider.** Model use follows your own provider's data handling and billing. Credentials remain in your existing Codex configuration/credential store; this project does not copy them.
 
 Private runtime data lives at `~/.codex/personal-gtd/` (or under your `CODEX_HOME`). This includes the inbox database, history cursors, native snapshots, local access token, notification receipts and operation journals. These files are not project source and must stay out of Git.
 
@@ -126,7 +129,7 @@ Private runtime data lives at `~/.codex/personal-gtd/` (or under your `CODEX_HOM
 - Source excerpts are treated as untrusted observations, including text that looks like instructions.
 - Notification previews contain task context, so choose lock-screen preview settings that suit you.
 
-The current UI and planning dates default to `Asia/Shanghai`. Browser draft fields are not persisted across a full reload. This is a personal workflow tool, not a complete calendar editor.
+The UI and planning dates use the system IANA timezone unless a local configuration explicitly provides one. Capture and clarification drafts are persisted in the workbench origin's local storage and cleared after successful submission. This is a personal workflow tool, not a complete calendar editor.
 
 ## Pause or stop
 

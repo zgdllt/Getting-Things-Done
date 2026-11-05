@@ -31,6 +31,10 @@ The arm64 artifact has been built and run on Apple Silicon. macOS 14 is the expl
 
 The source update passed 44 isolated Python tests, JavaScript syntax checking and the browser fixture. The fixture now checks the bottom-left Settings entry, model/effort persistence across reloads, the immediate saved/processing state, automatic candidate/reply updates, model-failure retry and Settings access on mobile. It uses a fake model and fake native bridge; no real system-list writes occur. The source installer includes both new Python modules and clarification prompt/schema.
 
+## Source adapter and local recall update
+
+The 2026-11-05 working-tree update passed 46 isolated Python tests, Python compilation, JavaScript syntax checking and the browser fixture. New checks cover the Computer History adapter boundary, Markdown memory summaries replacing covered raw events, retrieval of an older related clue, legacy timezone migration and persisted clarification drafts. The browser flow still uses a fake native bridge and confirms zero real Calendar/Reminders writes; the fixture also checked the source status section in Settings and completed with no browser errors.
+
 A separate synthetic smoke check made one real `gpt-6.1-terra / high` request through the existing Codex provider. Its answer job completed, generated an explanation and closed the explicitly finished synthetic candidate; the formal-operation journal stayed empty. This establishes that route at the check time, not service availability for every provider or model.
 
 A second real synthetic check used the installed asynchronous answer endpoint with the sparse `/usr/bin:/bin` PATH typical of a GUI login service. Saving returned before inference (about 5 ms in that local check), the detached worker located the user CLI, and its `gpt-6.1-terra / high` job completed with zero formal writes. The worker preserves the caller's PATH priority and adds the usual user/Homebrew CLI locations.

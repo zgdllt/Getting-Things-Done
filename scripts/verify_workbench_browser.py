@@ -18,6 +18,7 @@ import gtd_dashboard as web
 def run(artifacts=None, browser_executable=None):
     with tempfile.TemporaryDirectory(prefix="gtd-browser-") as temp:
         base=Path(temp);state=gtd.State(base)
+        gtd.atomic_json(base/"config.json", {"memory_source_enabled": False, "timezone": "Asia/Shanghai", "timezone_source": "user"})
         key=gtd.capture(state,"设计项目：整理第一版演示","project","设计项目")["candidate_key"]
         with state.db:
             state.db.execute("INSERT INTO questions VALUES(?,?,?,?,?,?,?)",("diagnostic",key,"这次想先验证哪一步？","open","",None,gtd.now()))
@@ -89,6 +90,7 @@ def run(artifacts=None, browser_executable=None):
                 assert page.url.endswith('#inbox')
                 page.locator('nav [data-view=inbox]').click()
                 page.locator('[data-answer=diagnostic]').fill('先完成页面原型，再核对主要交互。')
+                page.reload();expect(page.locator('[data-answer=diagnostic]')).to_have_value('先完成页面原型，再核对主要交互。')
                 page.screenshot(path=str(artifacts/'workbench-fixture-clarify.png'),full_page=True)
                 page.locator('#save-answers').click()
                 page.get_by_text('答复已保存，正在整理',exact=True).wait_for()
@@ -138,7 +140,7 @@ def run(artifacts=None, browser_executable=None):
                 page.get_by_role('button',name='关闭',exact=True).click()
                 assert not errors,errors
                 browser.close()
-            print(json.dumps({"ok":True,"flows":["session","today","clarify","preview-before-write","confirm-write","complete","capture","dismiss","projects","review","clipboard","mobile","settings-menu","model-persistence","immediate-answer-response","model-failure-retry"],"native_test_writes":0,"fake_native_writes":len(writes),"browser_errors":errors,"artifacts":str(artifacts)},ensure_ascii=False))
+            print(json.dumps({"ok":True,"flows":["session","today","clarify","draft-persistence","preview-before-write","confirm-write","complete","capture","dismiss","projects","review","clipboard","mobile","settings-menu","model-persistence","immediate-answer-response","model-failure-retry"],"native_test_writes":0,"fake_native_writes":len(writes),"browser_errors":errors,"artifacts":str(artifacts)},ensure_ascii=False))
         finally:
             server.shutdown();server.server_close();thread.join()
             for worker in workers:worker.join(10)
