@@ -135,7 +135,7 @@ window.TaskDeck = class TaskDeck {
     setTimeout(() => {
       notice.remove();
       if (this.heldCompletion === notice) this.heldCompletion = null;
-    }, 1000);
+    }, 1300);
   }
 
   async act({id, pending, success, kind = "advance", origin, completion = false}, operation, refresh = this.onChange) {
