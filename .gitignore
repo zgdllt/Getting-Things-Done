@@ -27,3 +27,8 @@ config.json
 workbench.json
 last-snapshot.json
 *-status.json
+_site/
+
+# Local voice references and scratch audio at the repo root (not redistributable)
+/*.wav
+/*.mp3

@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Getting Things Done · 宣传片</title>
+<!--
+  Self-contained promo film. All task names, people and activity are synthetic.
+  Controls: Space play/pause · R restart · ←/→ seek 2s · ?t=20 start at 20s
+  Recording: ?record hides controls; window.__seek(t) renders one deterministic frame.
+-->
+<style>
+:root{--paper:#f7f8f4;--ink:#24352e;--muted:#738077;--line:#e4e8e0;--green:#285745;--green-pale:#edf3e9;--lime:#d7e6ad;--amber:#9b662d;--serif:"Iowan Old Style","Songti SC","STSong",serif;--sans:"Avenir Next","PingFang SC","Hiragino Sans GB",sans-serif;--mono:"SFMono-Regular",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#17221e;overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;background:var(--paper);overflow:hidden;color:var(--ink);font:18px/1.6 var(--sans)}
+#stage>*{position:absolute}
+.eyebrow{font:15px var(--mono);letter-spacing:4px;color:#77916e;text-transform:uppercase}
+.serif{font-family:var(--serif)}
+
+/* Scene 1 */
+#s1{left:200px;top:300px;width:1500px}
+#s1 .eyebrow{margin-bottom:46px}
+#s1 .line{font:500 74px/1.5 var(--serif);letter-spacing:-1px}
+#s1 .n{font-weight:600;color:var(--green);display:inline-block;min-width:1.2em;text-align:center}
+#s1 .line.em{color:var(--green);margin-top:36px}
+
+/* Scene 1b: the GTD method */
+#gtd{left:200px;top:150px;width:1520px}
+#gtd h2{font:500 66px/1.4 var(--serif);margin:22px 0 10px;letter-spacing:-1px}
+#gtd .attr{font-size:18px;color:var(--muted)}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:26px;margin-top:70px}
+.step{border-top:2px solid #cdd8c4;padding-top:22px;position:relative}
+.step .k{font:44px/1 var(--serif);color:#b4c2aa}
+.step h3{font-size:34px;margin:16px 0 0;font-weight:600}
+.step .en{font:13px var(--mono);letter-spacing:3px;color:#8a9683;margin:4px 0 14px}
+.step p{font-size:17px;line-height:1.75;color:var(--muted);margin:0}
+.step.lit{border-top-color:var(--green)}
+.step.lit .k{color:var(--green)}
+#gtd-note{left:200px;top:880px;font:500 34px/1.4 var(--serif);color:var(--green)}
+
+/* Scene 2 */
+.cap{left:140px;top:110px;width:1300px}
+.cap h2{font:500 54px/1.4 var(--serif);margin:18px 0 0;letter-spacing:-.5px}
+.frag{background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 22px 18px;box-shadow:0 10px 30px #20351a0a;white-space:nowrap}
+.frag small{display:block;font:13px var(--mono);color:#93a08b;letter-spacing:.5px;margin-bottom:4px}
+.frag span{font-size:22px}
+.frag.lit{border-color:#8cae78;box-shadow:0 0 0 4px #8cae7826,0 14px 36px #28574522}
+.frag.lit small{color:var(--green)}
+#merge{left:760px;top:520px;width:400px;text-align:center;padding:18px 0;border-radius:40px;background:var(--green);color:#fff;font-size:24px;letter-spacing:1px}
+
+/* Side captions for scenes 3, 4, 6 */
+.side{left:140px;top:300px;width:540px}
+.side .num{font:96px/1 var(--serif);color:#c6cfbe;margin-bottom:26px}
+.side h2{font:500 60px/1.35 var(--serif);margin:16px 0 26px;letter-spacing:-1px}
+.side p{font-size:21px;line-height:1.85;color:var(--muted);margin:0}
+
+/* Window mock */
+.win{left:760px;top:110px;width:1040px;height:860px;background:var(--paper);border:1px solid #dbe2d6;border-radius:16px;box-shadow:0 50px 140px #1b33281f,0 8px 24px #1b33280f;overflow:hidden}
+.titlebar{height:40px;display:flex;align-items:center;gap:8px;padding:0 16px;background:#eef1e8;border-bottom:1px solid var(--line);position:relative}
+.titlebar i{width:12px;height:12px;border-radius:50%;display:block}
+.titlebar span{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--muted)}
+.wbody{position:absolute;top:41px;left:0;right:0;bottom:0;display:flex}
+.wside{width:184px;background:#f0f2eb;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column}
+.wbrand{display:flex;align-items:center;gap:9px;font-weight:650;font-size:14px;line-height:1.2;margin-bottom:34px}
+.wnav div{display:flex;align-items:center;gap:10px;padding:10px 11px;border-radius:9px;color:#69756a;font-size:15px;margin-bottom:5px}
+.wnav div.active{background:#e0e9d7;color:#234e3c;font-weight:600}
+.wnav b{font-weight:400;font-size:19px;width:20px}
+.wnav em{margin-left:auto;font:12px var(--mono);font-style:normal;background:#fff9;border-radius:5px;padding:2px 7px}
+.wside .bottom{margin-top:auto;font-size:12px;color:#8b9387}
+.wside .set{border:1px solid var(--line);border-radius:9px;padding:9px 10px;color:var(--ink);font-size:14px;margin-bottom:14px}
+.wside .set small{display:block;font:10px var(--mono);color:var(--muted)}
+.wside .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#79a56a;margin-right:7px;box-shadow:0 0 0 3px #79a56a1c}
+.wmain{flex:1;position:relative}
+.wtool{height:54px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 30px;font-size:13px;color:var(--muted);position:relative}
+.wtool .d{position:absolute;left:30px}
+.page{position:absolute;top:55px;left:0;right:0;bottom:0;padding:24px 30px}
+.page h1{font-size:30px;margin:6px 0 4px;letter-spacing:-1px;font-weight:600}
+.intro{color:var(--muted);font-size:14px;margin:0 0 18px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:20px 24px}
+.tags{display:flex;gap:8px;align-items:center;font:12px var(--mono);color:#a4ae9a}
+.tag{font:12px var(--sans);border-radius:4px;padding:2px 8px;background:#e9f2e3;color:var(--green)}
+.tag.m{background:#f1f4ed;color:#6c8060}
+.card h3{font-size:20px;margin:8px 0 10px;font-weight:600}
+.src{border:1px solid var(--line);background:#fcfdfa;border-radius:7px;padding:9px 13px;font:12.5px/1.9 var(--mono);color:#8c9683}
+.src b{color:var(--green);font-weight:500}
+.q{border-left:3px solid var(--lime);padding-left:16px;margin:16px 0 12px}
+.q label{display:block;font-size:16px;margin-bottom:9px}
+#answer{height:62px;border:1px solid #dbe2d7;border-radius:8px;background:#fafbf8;padding:10px 13px;font-size:15px}
+#answer.focus{border-color:#a8bda0;box-shadow:0 0 0 3px #a8bda026;background:#fff}
+.caret{display:inline-block;width:2px;height:19px;background:var(--green);vertical-align:-3px;margin-left:1px}
+.acts{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+.chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--green)}
+#chk{width:17px;height:17px;border:1.5px solid #b9c6b0;border-radius:4px;display:grid;place-items:center;color:#fff;font-size:12px;line-height:1}
+#chk.on{background:var(--green);border-color:var(--green)}
+#chk:not(.on) i{display:none}
+.btn{display:inline-block;padding:9px 16px;border-radius:7px;font-size:13px;font-weight:500;background:#edf0e8;color:var(--ink)}
+.btn.p{background:var(--green);color:#fff}
+.btn.pressed{filter:brightness(.82)}
+.btn.disabled{opacity:.42}
+.resp{position:relative;height:104px;margin-top:14px}
+.resp>div{position:absolute;inset:0;border:1px solid #dbe6d0;border-radius:9px;background:var(--green-pale);padding:14px 18px;font-size:15px}
+.resp strong{font-size:13px;color:var(--green)}
+.resp p{margin:5px 0 0}
+.resp small{display:block;font:11px var(--mono);color:var(--muted);margin-top:6px}
+#resp-pending{display:flex;gap:12px;align-items:center;color:var(--muted)}
+#spinner{width:17px;height:17px;border:2px solid #c7d9be;border-top-color:var(--green);border-radius:50%}
+.foot{position:absolute;left:30px;right:30px;bottom:22px;background:#fbfcf6;border:1px solid #d5dfcb;border-radius:10px;padding:12px 18px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 6px 28px #20351a0b;font-size:13px;color:var(--muted)}
+.foot .cnt{position:relative;width:200px;height:20px}
+.foot .cnt span{position:absolute;left:0;top:0}
+#backdrop{position:absolute;inset:0;background:#1d332e4d}
+#dlg{position:absolute;left:58px;top:150px;width:740px;background:#fcfdf9;border:1px solid #dce4d4;border-radius:16px;padding:30px 34px;box-shadow:0 30px 100px #172e2340}
+#dlg h2{font-size:25px;margin:0 0 6px}
+#dlg>p{color:var(--muted);font-size:14px;margin:0 0 6px}
+.pv{border-left:3px solid var(--lime);padding:6px 16px;margin:18px 0}
+.pv small{font:12px var(--mono);color:#8a9683;letter-spacing:.5px}
+.pv h3{font-size:18px;margin:3px 0 2px}
+.pv p{font-size:13px;color:var(--muted);margin:0}
+.dacts{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}
+#toast{left:50%;bottom:100px;margin-left:-210px;width:420px;text-align:center;padding:13px 20px;background:#244b3d;color:#fff;border-radius:10px;font-size:14px;box-shadow:0 8px 24px #254b3d30;position:absolute}
+/* Today page */
+.capture{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 12px 11px 18px;margin:18px 0 18px;color:#919990;font-size:14px}
+.capture b{font:24px var(--serif);color:#9aa990;font-weight:400}
+.capture .btn{margin-left:auto}
+.callout{display:flex;align-items:center;gap:16px;background:var(--green-pale);border:1px solid #dbe6d0;border-radius:10px;padding:16px 22px;margin-bottom:18px;font-size:15px}
+.callout .big{font:30px/1 var(--serif);color:var(--green)}
+.callout small{display:block;color:#7c8e73;font-size:12px}
+.split{display:grid;grid-template-columns:1.4fr 1fr;gap:18px}
+.panel{background:#fff;border:1px solid var(--line);border-radius:11px;padding:18px 20px;height:330px}
+.panel h4{font-size:18px;margin:0}
+.panel .sub{font-size:12px;color:var(--muted);margin:2px 0 10px}
+.task{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid #edf0e9;align-items:flex-start}
+.task:last-child{border:0}
+.circle{width:19px;height:19px;border-radius:50%;border:1.5px solid #c6cfbe;flex-shrink:0;margin-top:3px;position:relative}
+.circle .tick{position:absolute;inset:-1.5px;border-radius:50%;background:var(--green);color:#fff;font-size:12px;display:grid;place-items:center}
+.task .t{font-size:15px}
+.task .meta{font-size:12px;color:#8b9585;margin-top:2px}
+#task1.done .t{text-decoration:line-through;text-decoration-color:#9fb393}
+.ev{display:grid;grid-template-columns:56px 1fr;gap:12px;padding:8px 0}
+.ev .tm{font:14px var(--mono);color:#728267}
+.ev .tm small{display:block;font:11px var(--sans);color:#9ba18f}
+.ev .bd{border-left:2px solid #dbe6d0;padding-left:14px;font-size:15px;font-weight:500}
+.ev .bd small{display:block;font-size:12px;color:var(--muted);font-weight:400}
+
+/* Scene 5 */
+#s5{left:200px;top:190px;width:1520px}
+#s5 h2{font:500 76px/1.3 var(--serif);margin:22px 0 80px;letter-spacing:-1px}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:60px}
+.col{border-top:1px solid #cdd8c4;padding-top:30px}
+.col .k{font:64px/1 var(--serif);color:var(--green);margin-bottom:26px}
+.col h3{font-size:28px;margin:0 0 14px;font-weight:600}
+.col p{font-size:19px;line-height:1.85;color:var(--muted);margin:0}
+.col code{font:17px var(--mono);color:var(--green)}
+
+/* End card */
+#end{left:0;top:0;width:1920px;height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#end>*{display:block}
+#end .title{font-size:64px;font-weight:650;letter-spacing:-1.5px;margin:34px 0 4px}
+#end .tagline{font:500 36px/1.5 var(--serif);margin:40px 0 46px}
+#end .chips{display:flex;gap:14px;justify-content:center}
+#end .chips span{border:1px solid #cdd8c4;border-radius:30px;padding:8px 20px;font-size:17px;color:#5d6e60}
+#end .url{font:20px var(--mono);color:var(--green);margin-top:44px}
+#end .disc{font-size:14px;line-height:1.9;color:#a1aa97;position:absolute;bottom:34px;left:0;right:0}
+#brand{left:140px;bottom:44px;font:13px var(--mono);letter-spacing:3px;color:#a1ab98}
+
+#subs{left:0;right:0;bottom:66px;text-align:center;z-index:35;pointer-events:none;visibility:hidden}#subs span{display:inline-block;padding:8px 26px;border-radius:10px;background:#1d332ed9;color:#f7f8f4;font:500 42px/1.45 "PingFang SC","Hiragino Sans GB",sans-serif;letter-spacing:1px;box-shadow:0 6px 24px #0f1f1a33}#subs.up{bottom:150px}
+#cursor{left:0;top:0;width:1px;height:1px;z-index:40}
+#cursor svg{position:absolute;left:-3px;top:-2px;width:30px;height:34px;filter:drop-shadow(0 3px 5px #0003);transform-origin:3px 2px}
+#cursor.down svg{transform:scale(.86)}
+#ripple{left:-24px;top:-24px;width:48px;height:48px;border-radius:50%;border:2.5px solid var(--green);background:#28574514;z-index:39}
+
+/* Player controls (hidden while recording) */
+#bar{position:fixed;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:16px;padding:0 22px;background:#101915;color:#d9e3d3;font:13px var(--mono)}
+#bar button{background:#24352e;border:0;color:#e8efe3;border-radius:6px;padding:7px 13px;font:inherit;cursor:pointer}
+#track{flex:1;height:6px;background:#2b3a33;border-radius:3px;cursor:pointer;position:relative}
+#fill{position:absolute;left:0;top:0;bottom:0;background:#9cc27f;border-radius:3px}
+body.rec #bar{display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- Scene 1: the problem -->
+  <div id="s1">
+    <div class="eyebrow" id="s1-eb">A little room to think</div>
+    <div class="line" id="s1-l1">一天里，你打开了 <b class="n" id="c1">0</b> 个网页，</div>
+    <div class="line" id="s1-l2">回了 <b class="n" id="c2">0</b> 条消息，开了 <b class="n" id="c3">0</b> 场会。</div>
+    <div class="line em" id="s1-l3">其中有几件事，你已经答应了别人。</div>
+  </div>
+
+  <!-- Scene 1b: the GTD method -->
+  <div id="gtd">
+    <div class="eyebrow" id="gtd-eb">The method · GTD 工作法</div>
+    <h2 id="gtd-h">大脑用来想事情，<br>不是用来记事情。</h2>
+    <div class="attr" id="gtd-attr">把记挂的事从脑子里拿出来，放进一个你信任的系统，再定期回顾。</div>
+    <div class="steps">
+      <div class="step"><div class="k">01</div><h3>收集</h3><div class="en">CAPTURE</div><p>Computer History 自动留下线索，也可以随手「记一下」。</p></div>
+      <div class="step"><div class="k">02</div><h3>理清</h3><div class="en">CLARIFY</div><p>这是承诺吗？下一步是什么？只问需要你判断的。</p></div>
+      <div class="step"><div class="k">03</div><h3>组织</h3><div class="en">ORGANIZE</div><p>行动、等待、将来、项目、参考，落到提醒事项与日历。</p></div>
+      <div class="step"><div class="k">04</div><h3>回顾</h3><div class="en">REFLECT</div><p>未处理的线索、逾期行动和等待事项，一页看完。</p></div>
+      <div class="step"><div class="k">05</div><h3>执行</h3><div class="en">ENGAGE</div><p>「我有二十分钟」：从真实清单里挑下一步。</p></div>
+    </div>
+  </div>
+  <div id="gtd-note">最容易漏掉的，往往是第一步。</div>
+
+  <!-- Scene 2: scattered clues -->
+  <div class="cap" id="capA"><div class="eyebrow">01 收集 · Codex Computer History</div><h2>开启 Computer History 后，<br>一天的电脑活动会留下线索。</h2></div>
+  <div class="cap" id="capB"><div class="eyebrow">从线索到问题</div><h2>把相关的线索放在一起，<br>只留下一个需要你判断的问题。</h2></div>
+  <div class="frag" style="left:150px;top:380px"><small>SAFARI · 10:12</small><span>arXiv · Diffusion Policy 综述</span></div>
+  <div class="frag rel" style="left:700px;top:340px"><small>微信 · 10:47</small><span>王老师：周四评审前把演示发我看看？</span></div>
+  <div class="frag" style="left:1400px;top:400px"><small>MUSIC · 11:03</small><span>lo-fi beats to focus to</span></div>
+  <div class="frag" style="left:240px;top:580px"><small>TERMINAL · 13:20</small><span>pytest — 128 passed</span></div>
+  <div class="frag rel" style="left:860px;top:560px"><small>FIGMA · 14:05</small><span>第一版演示 v3 · 12 分钟前编辑</span></div>
+  <div class="frag" style="left:1470px;top:620px"><small>NOTES · 12:01</small><span>午饭：楼下面馆？</span></div>
+  <div class="frag rel" style="left:400px;top:790px"><small>日历 · 已存在</small><span>周四 14:00 原型评审</span></div>
+  <div class="frag" style="left:1060px;top:800px"><small>SLACK · 16:30</small><span>#lab 新论文分享</span></div>
+  <div class="frag" style="left:1500px;top:850px"><small>FINDER · 17:12</small><span>IMG_2041.HEIC</span></div>
+  <div id="merge">3 条线索 → 1 个问题</div>
+
+  <!-- Side captions -->
+  <div class="side" id="cap3"><div class="num">02</div><div class="eyebrow">理清 · Clarify</div><h2>只问需要<br>你判断的问题。</h2><p>相关线索合成一张卡片，原出处随时可查。答过的问题，不会再问一遍。</p></div>
+  <div class="side" id="cap4"><div class="num">03</div><div class="eyebrow">组织 · Organize</div><h2>你点头，<br>它才写入。</h2><p>行动进提醒事项，固定时间进日历，先预览再确认。每次写入都留有回执，结果不明时不会盲目重建。</p></div>
+  <div class="side" id="cap6"><div class="num">05</div><div class="eyebrow">回顾 · 执行 · Reflect &amp; Engage</div><h2>留一点心力，<br>给正在做的事。</h2><p>回顾页一次看完线索、逾期与等待；今天页只需决定先做哪一件。</p></div>
+
+  <!-- App window mock -->
+  <div class="win" id="win">
+    <div class="titlebar"><i style="background:#ec6a5e"></i><i style="background:#f4bf4f"></i><i style="background:#61c554"></i><span>Getting Things Done</span></div>
+    <div class="wbody">
+      <div class="wside">
+        <div class="wbrand"><svg width="30" height="30" viewBox="0 0 48 48"><rect width="48" height="48" rx="15" fill="#234f41"/><path d="M14 17h20M14 24h9m-9 7h9" fill="none" stroke="#f3f2e9" stroke-width="2.5" stroke-linecap="round"/><path d="m27 29 4 4 7-9" fill="none" stroke="#d0e492" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Getting Things<br>Done</span></div>
+        <div class="wnav">
+          <div id="nav-today"><b>◷</b>今天</div>
+          <div id="nav-inbox"><b>▤</b>待澄清<em id="badge">1</em></div>
+          <div><b>◈</b>项目与等待</div>
+          <div><b>↺</b>回顾</div>
+        </div>
+        <div class="bottom">
+          <div class="set">⚙ 设置<small>gpt-6.1-terra · high</small></div>
+          <div><span class="dot"></span>后台已连接</div>
+        </div>
+      </div>
+      <div class="wmain">
+        <div class="wtool"><span class="d" id="date-a">11月4日 星期三</span><span class="d" id="date-b">11月5日 星期四</span><span></span><span>⌕ 找一件事…　　↻ 刷新系统清单</span></div>
+
+        <!-- Clarify page -->
+        <div class="page" id="page-inbox">
+          <div class="eyebrow" style="font-size:11px">Clarify</div>
+          <h1>待澄清</h1>
+          <p class="intro">3 条线索合成了 1 个问题。答复会先保存，再立即整理。</p>
+          <div class="card">
+            <div class="tags">01<span class="tag">项目</span><span class="tag m">来自 3 条线索</span></div>
+            <h3>整理第一版演示，赶在周四评审前</h3>
+            <div class="src"><b>▾ 来源</b><br>微信 · 王老师：周四评审前把演示发我看看？<br>Figma · 第一版演示 v3 · 日历 · 周四 14:00 原型评审</div>
+            <div class="q">
+              <label>这次演示要交给谁？做到什么程度算完成？</label>
+              <div id="answer"><span id="answer-text"></span><span class="caret" id="caret"></span></div>
+            </div>
+            <div class="acts">
+              <div class="chk"><span id="chk"><i>✓</i></span>选中，稍后预览保存</div>
+              <div><span class="btn">忽略</span>　<span class="btn p" id="btn-save">保存答复并整理</span></div>
+            </div>
+            <div class="resp">
+              <div id="resp-pending"><span id="spinner"></span>正在依据你的答复整理…</div>
+              <div id="resp-result"><strong>建议的下一步</strong><p>明早用 30 分钟整理 5 页核心流程截图，评审前发给王老师。</p><small>项目 · 第一版演示　等待 · 王老师反馈</small></div>
+            </div>
+          </div>
+          <div class="foot"><div class="cnt"><span id="cnt0">尚未选择事项</span><span id="cnt1">已选 1 项，可预览保存</span></div><span class="btn p disabled" id="btn-preview">预览并保存</span></div>
+
+          <div id="backdrop"></div>
+          <div id="dlg">
+            <h2>确认写入系统清单</h2>
+            <p>以下变更会写入你的 Apple 提醒事项与日历。</p>
+            <div class="pv"><small>提醒事项 · 个人行动</small><h3>整理 5 页核心流程截图并发给王老师</h3><p>截止 11月5日 · 关联项目：第一版演示</p></div>
+            <div class="pv"><small>日历</small><h3>周四 14:00 原型评审</h3><p>已在日历中，不重复创建</p></div>
+            <div class="dacts"><span class="btn">返回修改</span><span class="btn p" id="btn-confirm">确认写入</span></div>
+          </div>
+        </div>
+
+        <!-- Today page -->
+        <div class="page" id="page-today">
+          <div class="eyebrow" style="font-size:11px">A little room to think</div>
+          <h1>今天，先做哪一件？</h1>
+          <div class="capture"><b>+</b>先记下来，稍后一起理清楚。<span class="btn p">记下来 ↵</span></div>
+          <div class="callout"><span class="big">✓</span><div>待澄清已清空<small>3 条线索已处理 · 1 项进入提醒事项</small></div></div>
+          <div class="split">
+            <div class="panel"><h4>正式任务 <small style="font:12px var(--mono);color:var(--muted)">02</small></h4><div class="sub">来自系统提醒事项 · 按截止日期排列</div>
+              <div class="task" id="task1"><span class="circle"><span class="tick">✓</span></span><div><div class="t">整理 5 页核心流程截图并发给王老师</div><div class="meta">个人行动 · 今天 · 第一版演示</div></div></div>
+              <div class="task"><span class="circle"></span><div><div class="t">回顾本周的等待事项</div><div class="meta">每周回顾 · 11月7日</div></div></div>
+            </div>
+            <div class="panel"><h4>今天的安排</h4><div class="sub">来自系统日历</div>
+              <div class="ev"><div class="tm">14:00<small>15:00</small></div><div class="bd">原型评审<small>第一版演示 · 图书馆 3F</small></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="toast">已写入提醒事项 · 回执已保存</div>
+  </div>
+
+  <!-- Scene 5: principles -->
+  <div id="s5">
+    <div class="eyebrow" id="s5-eb">Principles · 设计原则</div>
+    <h2 id="s5-h">线索，不是承诺。</h2>
+    <div class="cols">
+      <div class="col"><div class="k">01</div><h3>观察只是线索</h3><p>记录什么由你在 Computer History 中决定：可排除应用与网站，随时暂停。线索不会自动变成任务，更不会被当作“已完成”。</p></div>
+      <div class="col"><div class="k">02</div><h3>工作台留在本机</h3><p>服务只监听 <code>127.0.0.1</code>，候选与回执存在你的 Mac 上。整理线索时，相关摘录会发给你在 Codex 中配置的模型。</p></div>
+      <div class="col"><div class="k">03</div><h3>系统清单为准</h3><p>正式任务在提醒事项，时间安排在日历。后台从不替你写入。</p></div>
+    </div>
+  </div>
+
+  <!-- End card -->
+  <div id="end">
+    <svg class="logo" width="150" height="150" viewBox="0 0 48 48"><rect width="48" height="48" rx="15" fill="#234f41"/><path d="M14 17h20M14 24h9m-9 7h9" fill="none" stroke="#f3f2e9" stroke-width="2.5" stroke-linecap="round"/><path d="m27 29 4 4 7-9" fill="none" stroke="#d0e492" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="title">Getting Things Done</div>
+    <div class="eyebrow">A little room to think</div>
+    <div class="tagline">把记挂的事交给清单，把注意力留给眼前。</div>
+    <div class="chips"><span>macOS 14+</span><span>Apple 提醒事项 · 日历</span><span>Codex · Computer History</span><span>MIT 开源</span></div>
+    <div class="url">github.com/zgdllt/Getting-Things-Done</div>
+    <div class="disc">受 GTD 工作法启发的独立开源项目，与 David Allen Company、OpenAI、Apple 无官方关联<br>自动收集需在 ChatGPT macOS 桌面版开启 Computer History · 画面中的事项、人名与活动均为虚构<br>旁白由 Fish Audio S2 Pro 合成 · Built with Fish Audio · 配乐与音效为程序生成</div>
+  </div>
+
+  <div id="brand">GETTING THINGS DONE · A LITTLE ROOM TO THINK</div>
+  <div id="subs"><span></span></div>
+  <div id="ripple"></div>
+  <div id="cursor"><svg viewBox="0 0 30 34"><path d="M3 2v25l6.5-6 4.2 9.6 4.4-1.9-4.1-9.4H23z" fill="#fff" stroke="#1d2a24" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+</div>
+
+<div id="bar"><button id="play">❚❚ 暂停</button><button id="restart">↺ 重播</button><span id="time">0.0 / 0.0s</span><div id="track"><div id="fill"></div></div></div>
+
+<script>
+'use strict';
+const DURATION = 57;
+let SHIFT = 0; // seconds added to every time registered after the GTD scene
+const REC = new URLSearchParams(location.search).has('record');
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const stage = $('#stage');
+
+/* ---------- timeline primitives (render(t) is a pure function of t) ---------- */
+const DEF = {o: 1, x: 0, y: 0, s: 1, b: 0};
+const tracks = new Map(), toggles = [], typers = [], counters = [];
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const els = target => typeof target === 'string' ? $$(target) : [target];
+
+function kf(target, frames) {
+  for (const el of els(target)) {
+    if (!tracks.has(el)) tracks.set(el, []);
+    tracks.get(el).push(...frames.map(([t, v]) => [t + SHIFT, {...v}]));
+  }
+}
+function show(target, tIn, tOut, {dy = 24, d = .6, s = 1} = {}) {
+  const f = [[tIn, {o: 0, y: dy, s}], [tIn + d, {o: 1, y: 0, s: 1}]];
+  if (tOut != null) f.push([tOut, {o: 1, y: 0, s: 1}], [tOut + d, {o: 0, y: -dy * .6, s: 1}]);
+  kf(target, f);
+}
+function toggle(target, cls, t0, t1 = Infinity) {
+  for (const el of els(target)) {
+    let rec = toggles.find(r => r.el === el && r.cls === cls);
+    if (!rec) toggles.push(rec = {el, cls, ivs: []});
+    rec.ivs.push([t0 + SHIFT, t1 + SHIFT]);
+  }
+}
+const typer = (sel, text, t0, t1) => typers.push({el: $(sel), text, t0: t0 + SHIFT, t1: t1 + SHIFT});
+const counter = (sel, a, b, t0, t1) => counters.push({el: $(sel), a, b, t0: t0 + SHIFT, t1: t1 + SHIFT});
+
+function finalize() {
+  for (const [el, fr] of tracks) {
+    fr.sort((a, b) => a[0] - b[0]);
+    let cur = {...DEF};
+    for (const f of fr) { cur = {...cur, ...f[1]}; f[1] = cur; }
+  }
+}
+function sample(fr, t) {
+  if (t <= fr[0][0]) return fr[0][1];
+  for (let i = 1; i < fr.length; i++) {
+    const [t1, v1] = fr[i];
+    if (t <= t1) {
+      const [t0, v0] = fr[i - 1];
+      const p = ease(Math.min(1, Math.max(0, (t - t0) / ((t1 - t0) || 1))));
+      const out = {};
+      for (const k in v1) out[k] = v0[k] + (v1[k] - v0[k]) * p;
+      return out;
+    }
+  }
+  return fr[fr.length - 1][1];
+}
+function render(t) {
+  for (const [el, fr] of tracks) {
+    const v = sample(fr, t);
+    el.style.opacity = v.o.toFixed(3);
+    el.style.visibility = v.o < .003 ? 'hidden' : 'visible';
+    el.style.transform = `translate(${v.x.toFixed(2)}px,${v.y.toFixed(2)}px) scale(${v.s.toFixed(4)})`;
+    el.style.filter = v.b > .05 ? `blur(${v.b.toFixed(2)}px)` : 'none';
+  }
+  for (const r of toggles) r.el.classList.toggle(r.cls, r.ivs.some(([a, b]) => t >= a && t < b));
+  for (const c of counters) {
+    const p = ease(Math.min(1, Math.max(0, (t - c.t0) / (c.t1 - c.t0))));
+    c.el.textContent = Math.round(c.a + (c.b - c.a) * p);
+  }
+  for (const y of typers) {
+    const p = Math.min(1, Math.max(0, (t - y.t0) / (y.t1 - y.t0)));
+    y.el.textContent = y.text.slice(0, Math.floor(p * y.text.length));
+  }
+  $('#caret').style.visibility = (t >= 25.3 && t < 29.2 && (t < 28.5 || Math.floor(t * 2.2) % 2 === 0)) ? 'visible' : 'hidden';
+  $('#spinner').style.transform = `rotate(${(t * 360) % 360}deg)`;
+}
+
+/* ---------- layout helpers ---------- */
+function fit() {
+  const h = innerHeight - (REC ? 0 : 56), k = Math.min(innerWidth / 1920, h / 1080);
+  const ox = (innerWidth - 1920 * k) / 2, oy = (h - 1080 * k) / 2;
+  stage.style.transform = `translate(${ox}px,${oy}px) scale(${k})`;
+}
+function at(sel, fx = .5, fy = .5) {
+  const r = $(sel).getBoundingClientRect(), st = stage.getBoundingClientRect(), k = st.width / 1920;
+  return {x: (r.left - st.left + r.width * fx) / k, y: (r.top - st.top + r.height * fy) / k};
+}
+
+/* ---------- the film ---------- */
+function build() {
+  // Measure click targets before any transform is applied.
+  const P = {answer: at('#answer', .86, .55), save: at('#btn-save'), chk: at('#chk'),
+             preview: at('#btn-preview'), confirm: at('#btn-confirm'), tick: at('#task1 .circle')};
+  const gather = $$('.frag.rel').map(el => ({el, dx: 960 - (el.offsetLeft + el.offsetWidth / 2), dy: 570 - (el.offsetTop + el.offsetHeight / 2)}));
+
+  // 1 · Problem (0–7)
+  show('#s1-eb', .2, 6.3); show('#s1-l1', .5, 6.4, {dy: 30}); show('#s1-l2', 1.6, 6.5, {dy: 30}); show('#s1-l3', 3.4, 6.6, {dy: 30});
+  counter('#c1', 0, 47, .8, 2.2); counter('#c2', 0, 23, 1.9, 2.9); counter('#c3', 0, 3, 2.3, 3.0);
+
+  // 1b · The GTD method (7.2–15)
+  show('#gtd-eb', 7.3, 14.3); show('#gtd-h', 7.5, 14.3, {dy: 30}); show('#gtd-attr', 8.1, 14.3, {dy: 16});
+  $$('.step').forEach((el, i) => {
+    const tin = 8.9 + i * .3, f = [[tin, {o: 0, y: 30}], [tin + .6, {o: 1, y: 0}]];
+    if (i > 0) f.push([12.2, {o: 1}], [12.7, {o: .28}]);
+    f.push([14.3, {}], [14.9, {o: 0, y: -18}]);
+    kf(el, f);
+  });
+  toggle($$('.step')[0], 'lit', 12.2, 15);
+  show('#gtd-note', 12.5, 14.3, {dy: 20});
+  show('#brand', 7.0, 50.8, {dy: 0, d: .8});
+
+  // Everything below was authored on the original 49 s timeline; push it back by the GTD scene.
+  SHIFT = 8;
+
+  // 2 · Scattered clues (15–23)
+  show('#capA', 7.2, 11.3); show('#capB', 11.7, 14.4);
+  $$('.frag').forEach((el, i) => {
+    const tin = 7.4 + i * .22, drift = (i % 2 ? -1 : 1) * 12;
+    const f = [[tin, {o: 0, y: 30, s: .97}], [tin + .7, {o: 1, y: 0, s: 1}], [11.0, {y: drift}]];
+    const g = gather.find(g => g.el === el);
+    if (g) f.push([11.6, {s: 1.05}], [12.7, {s: 1.05}], [13.8, {o: 0, x: g.dx, y: g.dy, s: .5}]);
+    else f.push([11.6, {o: .22, b: 2.5}], [12.7, {o: .22}], [13.4, {o: 0, y: drift + 14, b: 5}]);
+    kf(el, f);
+  });
+  toggle('.frag.rel', 'lit', 11.0, 14);
+  kf('#merge', [[13.4, {o: 0, s: .7}], [13.9, {o: 1, s: 1}], [14.5, {o: 1, s: 1}], [15.0, {o: 0, s: 1.08}]]);
+
+  // 3–4 · Clarify & confirm in the window (15–32), 6 · Today (38.4–44)
+  kf('#win', [[15.0, {o: 0, y: 50, s: .985}], [15.8, {o: 1, y: 0, s: 1}], [31.6, {}], [32.3, {o: 0, y: -30}],
+              [38.4, {o: 0, y: 50, s: .985}], [39.2, {o: 1, y: 0, s: 1}], [43.2, {}], [43.9, {o: 0, y: -30}]]);
+  kf('#page-inbox', [[32.5, {o: 1}], [32.6, {o: 0}]]);
+  kf('#page-today', [[38.0, {o: 0}], [38.1, {o: 1}]]);
+  kf('#date-a', [[32.5, {o: 1}], [32.6, {o: 0}]]);
+  kf('#date-b', [[32.5, {o: 0}], [32.6, {o: 1}]]);
+  kf('#badge', [[32.5, {o: 1}], [32.6, {o: 0}]]);
+  toggle('#nav-inbox', 'active', 0, 35); toggle('#nav-today', 'active', 35);
+  show('#cap3', 15.4, 24.5); show('#cap4', 25.0, 31.5); show('#cap6', 39.0, 43.0);
+
+  toggle('#answer', 'focus', 17.3, 21.2);
+  typer('#answer-text', '周四评审前发给王老师，先讲清 5 页核心流程。', 17.6, 20.4);
+  toggle('#btn-save', 'pressed', 21.2, 21.4);
+  kf('#resp-pending', [[21.35, {o: 0, y: 8}], [21.7, {o: 1, y: 0}], [22.5, {o: 1}], [22.8, {o: 0}]]);
+  kf('#resp-result', [[22.7, {o: 0, y: 8}], [23.2, {o: 1, y: 0}]]);
+  toggle('#chk', 'on', 25.4);
+  kf('#cnt0', [[25.4, {o: 1}], [25.45, {o: 0}]]); kf('#cnt1', [[25.4, {o: 0}], [25.45, {o: 1}]]);
+  toggle('#btn-preview', 'disabled', 0, 25.4); toggle('#btn-preview', 'pressed', 26.0, 26.2);
+  kf('#backdrop', [[26.1, {o: 0}], [26.5, {o: 1}], [28.6, {o: 1}], [29.0, {o: 0}]]);
+  kf('#dlg', [[26.15, {o: 0, y: 18, s: .97}], [26.6, {o: 1, y: 0, s: 1}], [28.6, {}], [29.0, {o: 0, y: 10, s: .98}]]);
+  toggle('#btn-confirm', 'pressed', 28.5, 28.7);
+  show('#toast', 28.9, 31.0, {dy: 16, d: .4});
+
+  kf('#task1 .tick', [[41.0, {o: 0, s: .4}], [41.3, {o: 1, s: 1}]]);
+  kf('#task1', [[41.3, {o: 1}], [41.9, {o: .55}]]);
+  toggle('#task1', 'done', 41.15);
+
+  // Cursor and click ripples
+  const clicks = [[17.3, P.answer], [21.2, P.save], [25.4, P.chk], [26.0, P.preview], [28.5, P.confirm], [41.0, P.tick]];
+  kf('#cursor', [
+    [16.4, {o: 0, x: P.answer.x + 140, y: P.answer.y + 160}], [16.9, {o: 1}], [17.25, {x: P.answer.x, y: P.answer.y}],
+    [20.5, {}], [21.1, {x: P.save.x, y: P.save.y}], [24.7, {}], [25.3, {x: P.chk.x, y: P.chk.y}],
+    [25.5, {}], [25.95, {x: P.preview.x, y: P.preview.y}], [27.6, {}], [28.4, {x: P.confirm.x, y: P.confirm.y}],
+    [29.0, {o: 1}], [29.5, {o: 0}],
+    [39.4, {o: 0, x: P.tick.x + 170, y: P.tick.y + 130}], [39.9, {o: 1}], [40.85, {x: P.tick.x, y: P.tick.y}],
+    [41.8, {o: 1}], [42.4, {o: 0}],
+  ]);
+  kf('#ripple', [[0, {o: 0}]]);
+  for (const [c, p] of clicks) {
+    kf('#ripple', [[c - .01, {o: 0, x: p.x, y: p.y, s: .3}], [c, {o: .6, s: .3}], [c + .5, {o: 0, s: 1.7}]]);
+    toggle('#cursor', 'down', c, c + .18);
+  }
+
+  // 5 · Principles (32.3–38.4)
+  show('#s5-eb', 32.4, 37.7); show('#s5-h', 32.6, 37.8, {dy: 30});
+  $$('.col').forEach((el, i) => show(el, 33.3 + i * .45, 37.9, {dy: 34}));
+
+  // End card (43.6–49)
+  show('#end .logo', 43.8, null, {dy: 10, s: .82, d: .8});
+  show('#end .title', 44.2, null); show('#end .eyebrow', 44.4, null); show('#end .tagline', 44.8, null, {dy: 20});
+  show('#end .chips', 45.3, null, {dy: 14}); show('#end .url', 45.7, null, {dy: 10}); show('#end .disc', 46.0, null, {dy: 0});
+
+  finalize();
+}
+
+/* ---------- player ---------- */
+let t = 0, playing = false, last = null;
+const fmt = x => x.toFixed(1);
+function ui() {
+  $('#fill').style.width = `${(t / DURATION) * 100}%`;
+  $('#time').textContent = `${fmt(t)} / ${fmt(DURATION)}s`;
+  $('#play').textContent = playing ? '❚❚ 暂停' : '▶ 播放';
+}
+function loop(now) {
+  if (playing && last != null) { t += (now - last) / 1000; if (t >= DURATION) { t = DURATION; playing = false; } }
+  last = now; render(t); ui(); requestAnimationFrame(loop);
+}
+function seek(x) { t = Math.min(DURATION, Math.max(0, x)); }
+
+/* ---------- subtitles (cues injected by render.py --subs) ---------- */
+let SUBS = [], SUBS_RAISE = Infinity;
+const drawFrame = render;
+render = time => {
+  drawFrame(time);
+  const cue = SUBS.find(c => time >= c.start && time < c.end), box = $('#subs');
+  box.style.visibility = cue ? 'visible' : 'hidden';
+  if (cue) box.firstElementChild.textContent = cue.text;
+  box.classList.toggle('up', time >= SUBS_RAISE);
+};
+window.__setSubs = (cues, raiseAfter) => { SUBS = cues; SUBS_RAISE = raiseAfter; render(t); };
+
+window.__DURATION = DURATION;
+window.__seek = x => { seek(x); render(t); };
+
+document.fonts.ready.then(() => {
+  if (REC) document.body.classList.add('rec');
+  fit(); build();
+  seek(parseFloat(new URLSearchParams(location.search).get('t')) || 0);
+  render(t);
+  window.__ready = true;
+  if (REC) return;
+  playing = true;
+  addEventListener('resize', fit);
+  $('#play').onclick = () => { if (t >= DURATION) t = 0; playing = !playing; };
+  $('#restart').onclick = () => { t = 0; playing = true; };
+  $('#track').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * DURATION); };
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); $('#play').click(); }
+    else if (e.key === 'r' || e.key === 'R') $('#restart').click();
+    else if (e.key === 'ArrowRight') seek(t + 2);
+    else if (e.key === 'ArrowLeft') seek(t - 2);
+  });
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>

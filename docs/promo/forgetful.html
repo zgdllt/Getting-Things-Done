@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>这个东西治好了我的健忘 · Getting Things Done</title>
+<!--
+  Testimonial-style promo, version 2. All people, messages and activity are synthetic.
+  Controls: Space play/pause · R restart · ←/→ seek 2s · ?t=20 start at 20s
+  Recording: ?record hides controls; window.__seek(t) renders one deterministic frame.
+-->
+<style>
+:root{--paper:#f8f6ef;--ink:#26332d;--muted:#7a8178;--line:#e6e3d8;--green:#285745;--green-deep:#234f41;--green-pale:#edf3e9;--lime:#d7e6ad;--hl:#f4d566;--pen:#c0563f;
+  --serif:"Songti SC","STSong","Iowan Old Style",serif;--sans:"PingFang SC","Avenir Next","Hiragino Sans GB",sans-serif;--hand:"Kaiti SC","STKaiti","KaiTi",serif;--mono:"SFMono-Regular",Menlo,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#1b1f1c;overflow:hidden;-webkit-font-smoothing:antialiased}
+#stage{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0;overflow:hidden;color:var(--ink);font:18px/1.6 var(--sans);
+  background:linear-gradient(90deg,transparent 0 118px,#ecd3c8 118px 120px,transparent 120px),repeating-linear-gradient(180deg,transparent 0 59px,#ebe8dc 59px 60px),var(--paper)}
+#stage>*{position:absolute}
+.eyebrow{font:15px var(--mono);letter-spacing:4px;color:#8a9a80;text-transform:uppercase}
+.hand{font-family:var(--hand);color:var(--pen)}
+
+/* 1 · Title */
+#title-eb{left:206px;top:220px}
+.tl{left:200px;font:600 132px/1.3 var(--serif);letter-spacing:-2px;white-space:nowrap}
+#tl1{top:270px}
+#tl2{top:442px}
+.mk{position:relative;display:inline-block}
+#hl{position:absolute;left:-12px;right:-12px;bottom:18px;height:44%;background:var(--hl);opacity:.85;transform-origin:0 50%;z-index:-1;border-radius:6px 16px 8px 14px}
+#title-note{left:206px;top:690px;font-size:44px}
+
+/* Left captions */
+.cap{left:200px;top:330px;width:620px}
+.cap h2{font:600 64px/1.38 var(--serif);margin:14px 0 24px;letter-spacing:-1px}
+.cap p{font-size:23px;line-height:1.8;color:var(--muted);margin:0}
+.cap .u{background:linear-gradient(transparent 62%,var(--hl) 62% 92%,transparent 92%)}
+
+/* Chat panels */
+.chat{left:960px;width:760px;background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:0 40px 120px #2b3a2a1c;overflow:hidden}
+#chat1{top:130px;height:820px}
+#chat2{top:330px;height:600px}
+.chat .hd{height:74px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:21px;font-weight:600;background:#fbfaf6}
+.chat .bd{padding:26px 34px;display:flex;flex-direction:column;gap:22px}
+.row{display:flex;align-items:flex-start;gap:14px;position:relative}
+.row.me{flex-direction:row-reverse}
+.av{width:52px;height:52px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:20px;flex-shrink:0}
+.av.t{background:#7b8f9e}.av.m{background:#c9a46a}
+.bub{max-width:470px;padding:14px 20px;border-radius:14px;font-size:25px;line-height:1.5;background:#f1f1ec}
+.me .bub{background:#d9ecc9}
+.div{align-self:center;font-size:16px;color:#a2a69c}
+.file{display:flex;gap:16px;align-items:center;background:#fff;border:1px solid var(--line)}
+.file b{width:52px;height:62px;border-radius:6px;background:#d9614c;color:#fff;font:600 15px var(--sans);display:grid;place-items:center}
+.file small{display:block;font-size:16px;color:var(--muted)}
+#dots{position:absolute;right:66px;top:0;padding:18px 22px;border-radius:14px;background:#d9ecc9;display:flex;gap:8px}
+#dots i{width:10px;height:10px;border-radius:50%;background:#7c9a6c;display:block}
+#forgot{left:1200px;top:474px;font-size:40px;white-space:nowrap}
+
+/* 3 · Abandoned tools */
+.tool{top:380px;width:290px}
+.tool .pp{background:#fff;border:1px solid var(--line);border-radius:16px;padding:28px 26px 30px;box-shadow:0 18px 40px #2b3a2a14;height:300px}
+.tool h3{font-size:28px;margin:0 0 10px}
+.tool p{font-size:19px;color:var(--muted);margin:0 0 18px}
+.tool .bar{height:10px;border-radius:5px;background:#eceae1;margin:12px 0}
+.tool .bar i{display:block;height:100%;border-radius:5px;background:#c9d7bf}
+.stamp{position:absolute;left:46px;top:150px}
+.stamp span{display:inline-block;transform:rotate(-14deg);border:5px solid var(--pen);color:var(--pen);border-radius:12px;padding:4px 22px;font:700 56px/1.2 var(--hand);letter-spacing:6px;background:#fff8}
+
+/* 4 · Computer History timeline (generic mock) */
+#hist{left:930px;top:170px;width:830px;height:620px;background:#202221;border-radius:22px;color:#e9ebe7;padding:38px 44px;box-shadow:0 40px 120px #12181630}
+#hist h3{font-size:30px;margin:0;font-weight:600}
+#hist .sub{color:#9aa09a;font-size:17px;margin:4px 0 30px}
+.ent{display:grid;grid-template-columns:96px 1fr;gap:20px;padding:18px 20px;border-radius:14px;margin-bottom:12px;border:1px solid transparent}
+.ent .tm{font:16px var(--mono);color:#9aa09a;padding-top:4px}
+.ent h4{font-size:22px;margin:0 0 6px;font-weight:600}
+.ent p{font-size:17px;line-height:1.7;color:#b8bdb6;margin:0}
+.ent .ic{display:flex;gap:8px;margin-top:12px}
+.ent .ic i{width:22px;height:22px;border-radius:6px;display:block}
+.ent.lit{border-color:#a9c98a;background:#2a3328;box-shadow:0 0 0 4px #a9c98a22}
+#hist-chip{left:930px;top:820px;font-size:21px;color:#fff;background:var(--green);padding:12px 26px;border-radius:40px}
+</style>
+<style>
+/* 5 · Notification + workbench */
+.note{left:1360px;top:46px;width:500px;background:#fbfbf8f2;border:1px solid #e1e3dc;border-radius:20px;padding:18px 20px;display:flex;gap:16px;box-shadow:0 20px 50px #1d2a2226;backdrop-filter:blur(20px)}
+.note .ap{width:46px;height:46px;flex-shrink:0;border-radius:11px}
+.note small{display:flex;justify-content:space-between;font-size:14px;color:#8a8f88;width:100%}
+.note b{display:block;font-size:19px;margin:2px 0}
+.note p{margin:0;font-size:16px;line-height:1.5;color:#505a52}
+.note .tx{flex:1}
+.win{left:880px;top:170px;width:920px;height:800px;background:#f7f8f4;border:1px solid #dbe2d6;border-radius:18px;box-shadow:0 50px 140px #1b33281f;overflow:hidden}
+.tb{height:42px;display:flex;align-items:center;gap:8px;padding:0 18px;background:#eef1e8;border-bottom:1px solid var(--line);position:relative}
+.tb i{width:12px;height:12px;border-radius:50%;display:block}
+.tb span{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--muted)}
+.pg{position:absolute;top:43px;left:0;right:0;bottom:0;padding:28px 36px}
+.pg h1{font-size:32px;margin:4px 0 16px;font-weight:600;letter-spacing:-1px}
+.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:22px 26px}
+.tags{display:flex;gap:8px;align-items:center;font:13px var(--mono);color:#a4ae9a}
+.tag{font:13px var(--sans);border-radius:4px;padding:2px 9px;background:#e9f2e3;color:var(--green)}
+.card h3{font-size:23px;margin:10px 0 12px}
+.src{border:1px solid var(--line);background:#fcfdfa;border-radius:8px;padding:10px 14px;font:14px/1.8 var(--mono);color:#8c9683}
+.q{border-left:3px solid var(--lime);padding-left:16px;margin:18px 0 12px}
+.q label{display:block;font-size:18px;margin-bottom:10px}
+#answer{height:58px;border:1px solid #dbe2d7;border-radius:9px;background:#fafbf8;padding:12px 14px;font-size:18px}
+#answer.focus{border-color:#a8bda0;box-shadow:0 0 0 3px #a8bda026;background:#fff}
+#caret{display:inline-block;width:2px;height:21px;background:var(--green);vertical-align:-4px;margin-left:1px}
+.acts{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.btn{display:inline-block;padding:10px 18px;border-radius:8px;font-size:15px;font-weight:500;background:#edf0e8;color:var(--ink)}
+.btn.p{background:var(--green);color:#fff}
+.btn.pressed{filter:brightness(.82)}
+.btn.disabled{opacity:.4}
+.resp{position:relative;height:100px;margin-top:16px}
+.resp>div{position:absolute;inset:0;border:1px solid #dbe6d0;border-radius:10px;background:var(--green-pale);padding:14px 18px;font-size:17px}
+.resp strong{font-size:14px;color:var(--green)}
+.resp p{margin:5px 0 0}
+#r-pend{display:flex;gap:12px;align-items:center;color:var(--muted)}
+#spin{width:18px;height:18px;border:2px solid #c7d9be;border-top-color:var(--green);border-radius:50%}
+.foot{position:absolute;left:36px;right:36px;bottom:26px;background:#fbfcf6;border:1px solid #d5dfcb;border-radius:12px;padding:13px 18px;display:flex;justify-content:space-between;align-items:center;font-size:15px;color:var(--muted)}
+#bk{position:absolute;inset:0;background:#1d332e4d}
+#dlg{position:absolute;left:90px;top:190px;width:740px;background:#fcfdf9;border:1px solid #dce4d4;border-radius:16px;padding:30px 34px;box-shadow:0 30px 100px #172e2340}
+#dlg h2{font-size:26px;margin:0 0 6px}
+#dlg>p{color:var(--muted);font-size:15px;margin:0}
+.pv{border-left:3px solid var(--lime);padding:6px 16px;margin:20px 0}
+.pv small{font:13px var(--mono);color:#8a9683}
+.pv h3{font-size:21px;margin:3px 0 2px}
+.pv p{font-size:15px;color:var(--muted);margin:0}
+.dacts{display:flex;justify-content:flex-end;gap:10px}
+#toast{position:absolute;left:250px;bottom:110px;width:420px;text-align:center;padding:14px 20px;background:#244b3d;color:#fff;border-radius:10px;font-size:16px}
+
+/* 6 · Next morning */
+#clk-d{left:200px;top:170px;font:600 34px var(--serif);color:var(--muted)}
+#clk{left:192px;top:210px;font:500 190px/1 var(--serif);letter-spacing:-6px;color:var(--green)}
+.cap.lo{top:520px}
+
+/* 7 · Twist */
+#twist{left:0;top:0;width:1920px;height:1080px;background:var(--green-deep)}
+.tw{left:0;width:1920px;text-align:center;color:#f3f2e9}
+#tw1{top:300px;font:500 54px var(--serif);color:#b9cdb0}
+#tw2{top:400px;font:700 150px/1.2 var(--serif)}
+#tw3{top:640px;font:500 50px/1.6 var(--serif)}
+#tw3 .u{background:linear-gradient(transparent 64%,#d0e49266 64% 94%,transparent 94%)}
+
+/* 8 · End card */
+#end{left:0;top:0;width:1920px;height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+#end>*{display:block}
+#end .title{font-size:62px;font-weight:650;letter-spacing:-1.5px;margin:30px 0 2px;font-family:"Avenir Next",var(--sans)}
+#end .tagline{font:600 36px/1.5 var(--serif);margin:34px 0 40px}
+#end .chips{display:flex;gap:14px;justify-content:center}
+#end .chips span{border:1px solid #cdd8c4;border-radius:30px;padding:8px 20px;font-size:17px;color:#5d6e60;background:#fff8}
+#end .url{font:20px var(--mono);color:var(--green);margin-top:40px}
+#end .disc{font-size:14px;line-height:1.9;color:#9aa391;position:absolute;bottom:30px;left:0;right:0}
+
+#brand{left:200px;bottom:40px;font:13px var(--mono);letter-spacing:3px;color:#aab19f}
+#subs{left:0;right:0;bottom:66px;text-align:center;z-index:35;pointer-events:none;visibility:hidden}#subs span{display:inline-block;padding:8px 26px;border-radius:10px;background:#1d332ed9;color:#f7f8f4;font:500 42px/1.45 "PingFang SC","Hiragino Sans GB",sans-serif;letter-spacing:1px;box-shadow:0 6px 24px #0f1f1a33}#subs.up{bottom:175px}
+#cursor{left:0;top:0;width:1px;height:1px;z-index:40}
+#cursor svg{position:absolute;left:-3px;top:-2px;width:32px;height:36px;filter:drop-shadow(0 3px 5px #0003);transform-origin:3px 2px}
+#cursor.down svg{transform:scale(.86)}
+#ripple{left:-26px;top:-26px;width:52px;height:52px;border-radius:50%;border:2.5px solid var(--green);background:#28574514;z-index:39}
+#bar{position:fixed;left:0;right:0;bottom:0;height:56px;display:flex;align-items:center;gap:16px;padding:0 22px;background:#101915;color:#d9e3d3;font:13px var(--mono)}
+#bar button{background:#24352e;border:0;color:#e8efe3;border-radius:6px;padding:7px 13px;font:inherit;cursor:pointer}
+#track{flex:1;height:6px;background:#2b3a33;border-radius:3px;cursor:pointer;position:relative}
+#fill{position:absolute;left:0;top:0;bottom:0;background:#e2c45c;border-radius:3px}
+body.rec #bar{display:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 1 · Title -->
+  <div class="eyebrow" id="title-eb">一个健忘的人的自述 · 第 2 期</div>
+  <div class="tl" id="tl1">这个东西</div>
+  <div class="tl" id="tl2">治好了我的<span class="mk"><span id="hl"></span>健忘</span></div>
+  <div class="hand" id="title-note">（真的。先听我说完）</div>
+
+  <!-- 2 · The promise -->
+  <div class="cap" id="capA"><div class="eyebrow">我的问题</div><h2>我是那种，<br>答应完就忘的人。</h2><p>不是不在乎，是真的会忘。</p></div>
+  <div class="cap" id="capB"><div class="eyebrow">我的问题</div><h2>这个月，<br>已经是<span class="u">第三次</span>了。</h2></div>
+  <div class="chat" id="chat1">
+    <div class="hd">王老师</div>
+    <div class="bd">
+      <div class="div" id="m0">周二 10:47</div>
+      <div class="row" id="m1"><span class="av t">王</span><span class="bub">周四评审前，把第一版演示发我看看？</span></div>
+      <div class="row me" id="m2"><span class="av m">我</span><span class="bub">好的老师，明天晚上发您！</span></div>
+      <div class="div" id="m3">周四 13:20</div>
+      <div class="row" id="m4"><span class="av t">王</span><span class="bub">演示呢？</span></div>
+      <div class="row me"><span class="av m" id="m5a">我</span><span class="bub" id="m5">马上马上！！</span><span id="dots"><i></i><i></i><i></i></span></div>
+    </div>
+  </div>
+  <div class="hand" id="forgot">← 完全忘了</div>
+
+  <!-- 3 · Tools I abandoned -->
+  <div class="cap" id="capC"><div class="eyebrow">我试过</div><h2>待办 App、<br>手账、备忘录，<br>我都试过。</h2></div>
+  <div class="cap" id="capD"><div class="eyebrow">真正的问题</div><h2>问题是——<br>我连<span class="u">「记下来」</span><br>都会忘。</h2></div>
+  <div class="tool" style="left:900px"><div class="pp" style="transform:rotate(-3deg)"><h3>某待办 App</h3><p>坚持了 9 天</p><div class="bar"><i style="width:22%"></i></div><div class="bar"><i style="width:8%"></i></div><div class="bar"><i style="width:0"></i></div></div><div class="stamp"><span>弃坑</span></div></div>
+  <div class="tool" style="left:1220px"><div class="pp" style="transform:rotate(2deg)"><h3>手账本</h3><p>写了 3 页</p><div class="bar"><i style="width:40%"></i></div><div class="bar"><i style="width:12%"></i></div><div class="bar"><i style="width:0"></i></div></div><div class="stamp"><span>弃坑</span></div></div>
+  <div class="tool" style="left:1540px"><div class="pp" style="transform:rotate(-1.5deg)"><h3>手机备忘录</h3><p>417 条，从没回看</p><div class="bar"><i style="width:96%"></i></div><div class="bar"><i style="width:91%"></i></div><div class="bar"><i style="width:88%"></i></div></div><div class="stamp"><span>弃坑</span></div></div>
+  <!-- 4 · Computer History -->
+  <div class="cap" id="capE"><div class="eyebrow">后来</div><h2>后来，我打开了<br>Computer History。</h2><p>它在 Mac 上留下一天的活动时间线。<br>不用我记，也不用我写。</p></div>
+  <div class="cap" id="capF"><div class="eyebrow">然后</div><h2>GTD 从里面<br>认出了一句<br><span class="u">我随口答应的话</span>。</h2></div>
+  <div id="hist">
+    <h3>Computer history</h3><div class="sub">Today ⌄</div>
+    <div class="ent" id="e1"><div class="tm">10:50</div><div><h4>和王老师确认评审安排</h4><p>你在微信里答应王老师，周三晚上发送第一版演示，供周四评审前查看。</p><div class="ic"><i style="background:#3fb34f"></i><i style="background:#4b8de8"></i></div></div></div>
+    <div class="ent" id="e2"><div class="tm">14:10</div><div><h4>修改第一版演示 v3</h4><p>你调整了核心流程的 5 个页面，并导出了一版截图。</p><div class="ic"><i style="background:#a259ff"></i><i style="background:#f24e1e"></i></div></div></div>
+    <div class="ent" id="e3"><div class="tm">16:30</div><div><h4>阅读组会分享的新论文</h4><p>你在浏览器中阅读并收藏了两篇关于扩散策略的论文。</p><div class="ic"><i style="background:#4b8de8"></i><i style="background:#e0a63a"></i></div></div></div>
+  </div>
+  <div id="hist-chip">→ 认出 1 个承诺 · 不会自动建任务</div>
+
+  <!-- 5 · One question, then confirm -->
+  <div class="cap" id="capG"><div class="eyebrow">它做的事</div><h2>它只问了我<br>一个问题。</h2><p>回答完，我确认一下，<br>它才写进提醒事项。</p></div>
+  <div class="note" id="note1"><svg class="ap" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="#234f41"/><path d="M14 17h20M14 24h9m-9 7h9" fill="none" stroke="#f3f2e9" stroke-width="2.5" stroke-linecap="round"/><path d="m27 29 4 4 7-9" fill="none" stroke="#d0e492" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="tx"><small><span>GETTING THINGS DONE · 待澄清</span><span>刚刚</span></small><b>发第一版演示给王老师</b><p>你答应了周三晚上发。做到什么程度算完成？</p></div></div>
+  <div class="win" id="win">
+    <div class="tb"><i style="background:#ec6a5e"></i><i style="background:#f4bf4f"></i><i style="background:#61c554"></i><span>Getting Things Done</span></div>
+    <div class="pg">
+      <div class="eyebrow" style="font-size:12px">Clarify</div>
+      <h1>待澄清</h1>
+      <div class="card">
+        <div class="tags">01<span class="tag">承诺</span><span class="tag">来自 Computer History</span></div>
+        <h3>发第一版演示给王老师，赶在周四评审前</h3>
+        <div class="src">微信 · 周二 10:47<br>你：好的老师，明天晚上发您！</div>
+        <div class="q"><label>做到什么程度算完成？</label><div id="answer"><span id="ans"></span><span id="caret"></span></div></div>
+        <div class="acts"><span class="btn">忽略</span><span class="btn p" id="b-save">保存答复并整理</span></div>
+        <div class="resp">
+          <div id="r-pend"><span id="spin"></span>正在依据你的答复整理…</div>
+          <div id="r-ok"><strong>建议的下一步</strong><p>周三整理 5 页核心流程截图，晚上发给王老师。</p></div>
+        </div>
+      </div>
+      <div class="foot"><span>整理完成后可预览保存</span><span class="btn p" id="b-prev">预览并保存</span></div>
+      <div id="bk"></div>
+      <div id="dlg">
+        <h2>确认写入提醒事项</h2><p>确认后才会写入，后台从不替你写。</p>
+        <div class="pv"><small>提醒事项 · 个人行动</small><h3>整理 5 页核心流程截图并发给王老师</h3><p>截止 11月4日（周三）· 关联项目：第一版演示</p></div>
+        <div class="dacts"><span class="btn">返回修改</span><span class="btn p" id="b-ok">确认写入</span></div>
+      </div>
+      <div id="toast">已写入提醒事项 · 回执已保存</div>
+    </div>
+  </div>
+
+  <!-- 6 · Next morning -->
+  <div id="clk-d">周三 早上</div>
+  <div id="clk">09:00</div>
+  <div class="cap lo" id="capH"><h2>第二天一早，<br>它比我先想起来。</h2></div>
+  <div class="cap lo" id="capI"><h2>当天晚上就发了。<br><span class="u">提前了一天。</span></h2></div>
+  <div class="note" id="note2"><svg class="ap" viewBox="0 0 48 48"><rect width="48" height="48" rx="12" fill="#fff" stroke="#e1e3dc"/><circle cx="15" cy="16" r="4" fill="#f09a37"/><circle cx="15" cy="27" r="4" fill="#4b8de8"/><circle cx="15" cy="38" r="4" fill="#e45b4f"/><path d="M24 16h14M24 27h14M24 38h10" stroke="#c8ccc4" stroke-width="2.5" stroke-linecap="round"/></svg><div class="tx"><small><span>提醒事项</span><span>09:00</span></small><b>整理 5 页核心流程截图并发给王老师</b><p>今天 · 第一版演示</p></div></div>
+  <div class="chat" id="chat2">
+    <div class="hd">王老师</div>
+    <div class="bd">
+      <div class="div" id="n0">周三 21:14</div>
+      <div class="row me" id="n1"><span class="av m">我</span><span class="bub file"><b>PDF</b><span>第一版演示.pdf<small>5 页 · 2.4 MB</small></span></span></div>
+      <div class="row me" id="n2"><span class="av m">我</span><span class="bub">老师，演示发您了～</span></div>
+      <div class="row" id="n3"><span class="av t">王</span><span class="bub">收到，还提前了一天 👍</span></div>
+    </div>
+  </div>
+
+  <!-- 7 · Twist -->
+  <div id="twist"></div>
+  <div class="tw" id="tw1">所以，健忘治好了吗？</div>
+  <div class="tw" id="tw2">没有。</div>
+  <div class="tw" id="tw3">只是答应过的事，<br><span class="u">不用再靠我记了。</span></div>
+
+  <!-- 8 · End card -->
+  <div id="end">
+    <svg class="logo" width="140" height="140" viewBox="0 0 48 48"><rect width="48" height="48" rx="15" fill="#234f41"/><path d="M14 17h20M14 24h9m-9 7h9" fill="none" stroke="#f3f2e9" stroke-width="2.5" stroke-linecap="round"/><path d="m27 29 4 4 7-9" fill="none" stroke="#d0e492" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div class="title">Getting Things Done</div>
+    <div class="eyebrow">A little room to think</div>
+    <div class="tagline">把记挂的事交给清单，把注意力留给眼前。</div>
+    <div class="chips"><span>受 GTD 工作法启发</span><span>Codex · Computer History</span><span>Apple 提醒事项 · 日历</span><span>MIT 开源</span></div>
+    <div class="url">github.com/zgdllt/Getting-Things-Done</div>
+    <div class="disc">独立开源项目，与 David Allen Company、OpenAI、Apple 无官方关联<br>自动收集依赖 Computer History：目前仅 ChatGPT macOS 桌面版（Pro / Business / Enterprise），默认关闭，需自行开启<br>个人体验，因人而异 · 画面中的人物、消息与活动均为虚构<br>旁白由 Fish Audio S2 Pro 合成 · Built with Fish Audio · 配乐与音效为程序生成</div>
+  </div>
+
+  <div id="brand">这个东西治好了我的健忘 · GETTING THINGS DONE</div>
+  <div id="subs"><span></span></div>
+  <div id="ripple"></div>
+  <div id="cursor"><svg viewBox="0 0 30 34"><path d="M3 2v25l6.5-6 4.2 9.6 4.4-1.9-4.1-9.4H23z" fill="#fff" stroke="#1d2a24" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+</div>
+
+<div id="bar"><button id="play">❚❚ 暂停</button><button id="restart">↺ 重播</button><span id="time">0.0 / 0.0s</span><div id="track"><div id="fill"></div></div></div>
+<script>
+'use strict';
+const DURATION = 58;
+const REC = new URLSearchParams(location.search).has('record');
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const stage = $('#stage');
+
+/* ---------- timeline primitives: render(t) is a pure function of t ---------- */
+const DEF = {o: 1, x: 0, y: 0, s: 1, sx: 1, b: 0};
+const tracks = new Map(), toggles = [], typers = [];
+const ease = p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const els = target => typeof target === 'string' ? $$(target) : [target];
+
+function kf(target, frames) {
+  for (const el of els(target)) {
+    if (!tracks.has(el)) tracks.set(el, []);
+    tracks.get(el).push(...frames.map(([t, v]) => [t, {...v}]));
+  }
+}
+function show(target, tIn, tOut, {dy = 24, d = .6, s = 1} = {}) {
+  const f = [[tIn, {o: 0, y: dy, s}], [tIn + d, {o: 1, y: 0, s: 1}]];
+  if (tOut != null) f.push([tOut, {o: 1, y: 0, s: 1}], [tOut + d, {o: 0, y: -dy * .6, s: 1}]);
+  kf(target, f);
+}
+function toggle(target, cls, t0, t1 = Infinity) {
+  for (const el of els(target)) {
+    let rec = toggles.find(r => r.el === el && r.cls === cls);
+    if (!rec) toggles.push(rec = {el, cls, ivs: []});
+    rec.ivs.push([t0, t1]);
+  }
+}
+const typer = (sel, text, t0, t1) => typers.push({el: $(sel), text, t0, t1});
+
+function finalize() {
+  for (const fr of tracks.values()) {
+    fr.sort((a, b) => a[0] - b[0]);
+    let cur = {...DEF};
+    for (const f of fr) { cur = {...cur, ...f[1]}; f[1] = cur; }
+  }
+}
+function sample(fr, t) {
+  if (t <= fr[0][0]) return fr[0][1];
+  for (let i = 1; i < fr.length; i++) {
+    const [t1, v1] = fr[i];
+    if (t <= t1) {
+      const [t0, v0] = fr[i - 1];
+      const p = ease(Math.min(1, Math.max(0, (t - t0) / ((t1 - t0) || 1))));
+      const out = {};
+      for (const k in v1) out[k] = v0[k] + (v1[k] - v0[k]) * p;
+      return out;
+    }
+  }
+  return fr[fr.length - 1][1];
+}
+function render(t) {
+  for (const [el, fr] of tracks) {
+    const v = sample(fr, t);
+    el.style.opacity = v.o.toFixed(3);
+    el.style.visibility = v.o < .003 ? 'hidden' : 'visible';
+    el.style.transform = `translate(${v.x.toFixed(2)}px,${v.y.toFixed(2)}px) scale(${(v.s * v.sx).toFixed(4)},${v.s.toFixed(4)})`;
+    el.style.filter = v.b > .05 ? `blur(${v.b.toFixed(2)}px)` : 'none';
+  }
+  for (const r of toggles) r.el.classList.toggle(r.cls, r.ivs.some(([a, b]) => t >= a && t < b));
+  for (const y of typers) {
+    const p = Math.min(1, Math.max(0, (t - y.t0) / (y.t1 - y.t0)));
+    y.el.textContent = y.text.slice(0, Math.floor(p * y.text.length));
+  }
+  $('#caret').style.visibility = (t >= 31.6 && t < 34.2 && (t < 33.8 || Math.floor(t * 2.2) % 2 === 0)) ? 'visible' : 'hidden';
+  $('#spin').style.transform = `rotate(${(t * 360) % 360}deg)`;
+  $$('#dots i').forEach((d, i) => { d.style.transform = `translateY(${(-5 * Math.max(0, Math.sin(t * 7 - i * .8))).toFixed(2)}px)`; });
+}
+
+/* ---------- layout helpers ---------- */
+function fit() {
+  const h = innerHeight - (REC ? 0 : 56), k = Math.min(innerWidth / 1920, h / 1080);
+  stage.style.transform = `translate(${(innerWidth - 1920 * k) / 2}px,${(h - 1080 * k) / 2}px) scale(${k})`;
+}
+function at(sel, fx = .5, fy = .5) {
+  const r = $(sel).getBoundingClientRect(), st = stage.getBoundingClientRect(), k = st.width / 1920;
+  return {x: (r.left - st.left + r.width * fx) / k, y: (r.top - st.top + r.height * fy) / k};
+}
+
+/* ---------- the film ---------- */
+function build() {
+  const P = {note: at('#note1', .45, .55), answer: at('#answer', .82, .55), save: at('#b-save'),
+             prev: at('#b-prev'), ok: at('#b-ok')};
+
+  // 1 · Title (0–5)
+  show('#title-eb', .3, 4.3); show('#tl1', .5, 4.4, {dy: 34}); show('#tl2', 1.0, 4.5, {dy: 34});
+  kf('#hl', [[1.9, {sx: 0}], [2.6, {sx: 1}]]);
+  kf('#title-note', [[2.9, {o: 0, y: 10}], [3.4, {o: 1, y: 0}], [4.5, {}], [5.0, {o: 0}]]);
+
+  // 2 · The promise I forgot (5–14)
+  show('#capA', 5.3, 10.2); show('#capB', 10.8, 13.6);
+  show('#chat1', 5.6, 13.6, {dy: 40});
+  show('#m0', 6.0, null, {dy: 10}); show('#m1', 6.3, null, {dy: 16}); show('#m2', 7.4, null, {dy: 16});
+  show('#m3', 8.6, null, {dy: 10}); show('#m4', 9.2, null, {dy: 16});
+  kf('#m5a', [[10.5, {o: 0}], [10.8, {o: 1}]]);
+  kf('#dots', [[10.6, {o: 0}], [10.9, {o: 1}], [11.8, {o: 1}], [11.9, {o: 0}]]);
+  kf('#m5', [[11.85, {o: 0, s: .9}], [12.2, {o: 1, s: 1}]]);
+  kf('#forgot', [[9.9, {o: 0, x: -20}], [10.4, {o: 1, x: 0}], [13.4, {}], [13.9, {o: 0}]]);
+
+  // 3 · Tools I abandoned (14–21)
+  show('#capC', 14.3, 17.6); show('#capD', 18.0, 20.5);
+  $$('.tool').forEach((el, i) => {
+    show(el, 14.8 + i * .35, 20.5, {dy: 40});
+    kf(el.querySelector('.stamp'), [[16.0 + i * .5, {o: 0, s: 1.9}], [16.3 + i * .5, {o: 1, s: 1}]]);
+  });
+
+  // 4 · Computer History (21–29)
+  show('#capE', 21.3, 25.2); show('#capF', 25.6, 28.6);
+  show('#hist', 21.6, 28.6, {dy: 40});
+  ['#e1', '#e2', '#e3'].forEach((s, i) => kf(s, [[22.3 + i * .4, {o: 0, y: 14}], [22.8 + i * .4, {o: 1, y: 0}]]));
+  toggle('#e1', 'lit', 25.4, 29.5);
+  kf('#e2', [[25.4, {}], [25.9, {o: .35}]]); kf('#e3', [[25.4, {}], [25.9, {o: .35}]]);
+  show('#hist-chip', 26.2, 28.6, {dy: 14});
+
+  // 5 · One question, then confirm (29–39)
+  kf('#note1', [[29.0, {o: 0, y: -30}], [29.5, {o: 1, y: 0}], [30.5, {}], [30.9, {o: 0, y: -16}]]);
+  show('#capG', 30.6, 38.6);
+  kf('#win', [[30.7, {o: 0, y: 40, s: .985}], [31.4, {o: 1, y: 0, s: 1}], [38.6, {}], [39.2, {o: 0, y: -24}]]);
+  toggle('#answer', 'focus', 31.6, 34.2);
+  typer('#ans', '5 页核心流程截图就够，周三晚上发。', 31.8, 33.8);
+  toggle('#b-save', 'pressed', 34.2, 34.4);
+  kf('#r-pend', [[34.35, {o: 0, y: 8}], [34.7, {o: 1, y: 0}], [35.1, {}], [35.4, {o: 0}]]);
+  kf('#r-ok', [[35.3, {o: 0, y: 8}], [35.8, {o: 1, y: 0}]]);
+  toggle('#b-prev', 'disabled', 0, 35.6); toggle('#b-prev', 'pressed', 36.2, 36.4);
+  kf('#bk', [[36.3, {o: 0}], [36.7, {o: 1}], [37.7, {}], [38.1, {o: 0}]]);
+  kf('#dlg', [[36.35, {o: 0, y: 18, s: .97}], [36.8, {o: 1, y: 0, s: 1}], [37.7, {}], [38.1, {o: 0, y: 10, s: .98}]]);
+  toggle('#b-ok', 'pressed', 37.5, 37.7);
+  show('#toast', 38.0, 38.5, {dy: 14, d: .35});
+
+  const clicks = [[30.4, P.note], [31.6, P.answer], [34.2, P.save], [36.2, P.prev], [37.5, P.ok]];
+  kf('#cursor', [
+    [29.5, {o: 0, x: P.note.x - 160, y: P.note.y + 200}], [29.8, {o: 1}], [30.35, {x: P.note.x, y: P.note.y}],
+    [30.6, {}], [31.55, {x: P.answer.x, y: P.answer.y}], [33.6, {}], [34.15, {x: P.save.x, y: P.save.y}],
+    [35.5, {}], [36.15, {x: P.prev.x, y: P.prev.y}], [36.8, {}], [37.45, {x: P.ok.x, y: P.ok.y}],
+    [38.2, {o: 1}], [38.6, {o: 0}],
+  ]);
+  kf('#ripple', [[0, {o: 0}]]);
+  for (const [c, p] of clicks) {
+    kf('#ripple', [[c - .01, {o: 0, x: p.x, y: p.y, s: .3}], [c, {o: .6, s: .3}], [c + .5, {o: 0, s: 1.7}]]);
+    toggle('#cursor', 'down', c, c + .18);
+  }
+
+  // 6 · Next morning (39–46)
+  show('#clk-d', 39.2, 45.4, {dy: 14}); show('#clk', 39.4, 45.4, {dy: 30});
+  show('#capH', 39.8, 42.3); show('#capI', 42.7, 45.4);
+  kf('#note2', [[40.0, {o: 0, y: -30}], [40.5, {o: 1, y: 0}], [45.4, {}], [45.9, {o: 0, y: -16}]]);
+  show('#chat2', 41.6, 45.4, {dy: 40});
+  show('#n0', 42.0, null, {dy: 10}); show('#n1', 42.3, null, {dy: 16}); show('#n2', 42.8, null, {dy: 16});
+  show('#n3', 44.0, null, {dy: 16});
+  show('#brand', 5.0, 45.6, {dy: 0, d: .8});
+
+  // 7 · Twist (46–52)
+  kf('#twist', [[46.0, {o: 0}], [46.5, {o: 1}], [51.6, {}], [52.1, {o: 0}]]);
+  show('#tw1', 46.6, 51.3); show('#tw2', 47.8, 51.3, {dy: 10, s: 1.15, d: .45}); show('#tw3', 49.0, 51.3);
+
+  // 8 · End card (52–58)
+  show('#end .logo', 52.3, null, {dy: 10, s: .82, d: .8});
+  show('#end .title', 52.7, null); show('#end .eyebrow', 52.9, null); show('#end .tagline', 53.3, null, {dy: 20});
+  show('#end .chips', 53.8, null, {dy: 14}); show('#end .url', 54.2, null, {dy: 10}); show('#end .disc', 54.5, null, {dy: 0});
+
+  finalize();
+}
+
+/* ---------- player ---------- */
+let t = 0, playing = false, last = null;
+function ui() {
+  $('#fill').style.width = `${(t / DURATION) * 100}%`;
+  $('#time').textContent = `${t.toFixed(1)} / ${DURATION.toFixed(1)}s`;
+  $('#play').textContent = playing ? '❚❚ 暂停' : '▶ 播放';
+}
+function loop(now) {
+  if (playing && last != null) { t += (now - last) / 1000; if (t >= DURATION) { t = DURATION; playing = false; } }
+  last = now; render(t); ui(); requestAnimationFrame(loop);
+}
+const seek = x => { t = Math.min(DURATION, Math.max(0, x)); };
+/* ---------- subtitles (cues injected by render.py --subs) ---------- */
+let SUBS = [], SUBS_RAISE = Infinity;
+const drawFrame = render;
+render = time => {
+  drawFrame(time);
+  const cue = SUBS.find(c => time >= c.start && time < c.end), box = $('#subs');
+  box.style.visibility = cue ? 'visible' : 'hidden';
+  if (cue) box.firstElementChild.textContent = cue.text;
+  box.classList.toggle('up', time >= SUBS_RAISE);
+};
+window.__setSubs = (cues, raiseAfter) => { SUBS = cues; SUBS_RAISE = raiseAfter; render(t); };
+
+window.__DURATION = DURATION;
+window.__seek = x => { seek(x); render(t); };
+
+document.fonts.ready.then(() => {
+  if (REC) document.body.classList.add('rec');
+  fit(); build();
+  seek(parseFloat(new URLSearchParams(location.search).get('t')) || 0);
+  render(t);
+  window.__ready = true;
+  if (REC) return;
+  playing = true;
+  addEventListener('resize', fit);
+  $('#play').onclick = () => { if (t >= DURATION) t = 0; playing = !playing; };
+  $('#restart').onclick = () => { t = 0; playing = true; };
+  $('#track').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * DURATION); };
+  addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); $('#play').click(); }
+    else if (e.key === 'r' || e.key === 'R') $('#restart').click();
+    else if (e.key === 'ArrowRight') seek(t + 2);
+    else if (e.key === 'ArrowLeft') seek(t - 2);
+  });
+  requestAnimationFrame(loop);
+});
+</script>
+</body>
+</html>
