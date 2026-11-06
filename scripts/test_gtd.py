@@ -69,6 +69,59 @@ class GTDTests(unittest.TestCase):
         self.assertTrue(any("回复导师" in item["text"] for item in records
                             if item["source_type"] == "computer_history_memory_retro"))
 
+    def test_process_preserves_the_exact_summary_sources_given_to_the_model(self):
+        resources = self.root / "memories" / "resources"
+        resources.mkdir(parents=True)
+        current = resources / "2026-11-03T16-20-00-now1-10min-current.md"
+        current.write_text("当前正在处理回复导师的下一步。", encoding="utf-8")
+        (resources / "2026-10-31T16-20-00-old1-10min-history.md").write_text(
+            "之前记过回复导师并核对实验结果。", encoding="utf-8")
+        gtd.atomic_json(self.state.base / "config.json",
+                        {"memory_root": str(resources.parent), "memory_source_enabled": True})
+        self.events.write_text(json.dumps(self.event()) + "\n")
+        gtd.spool(self.state, self.history)
+        observed = {}
+
+        def extract(_state, _command, prompt):
+            context = json.loads(prompt.split("OBSERVED_DATA_JSON:\n", 1)[1])
+            observed.update(context)
+            # A memory can change while inference runs. Persist the source
+            # actually supplied to this call, rather than reading it again.
+            current.write_text("推理期间更新的摘要，不是本次引用的内容。", encoding="utf-8")
+            result = self.analysis(context["events"][0]["event_key"])
+            result["candidates"][0]["event_keys"] = [item["event_key"] for item in context["events"]]
+            return result
+
+        with patch.object(gtd, "extractor_command", return_value=["fixture"]), \
+             patch.object(gtd, "run_extractor", side_effect=extract), \
+             patch.object(gtd.gtd_sources, "analysis_records",
+                          wraps=gtd.gtd_sources.analysis_records) as prepare:
+            result = gtd.process(self.state, limit=1, notifications=False)
+        self.assertEqual(result["processed_batches"], 1)
+        self.assertEqual(prepare.call_count, 1)
+        self.assertEqual(observed["raw_event_count"], 1)
+        self.assertEqual({item["source_type"] for item in observed["events"]},
+                         {"computer_history_memory", "computer_history_memory_retro"})
+        evidence = json.loads(self.state.rows("SELECT evidence FROM candidates")[0]["evidence"])
+        self.assertEqual(evidence, observed["events"])
+        self.assertIn("当前正在处理回复导师的下一步。", [item["text"] for item in evidence])
+        batch = self.state.rows("SELECT * FROM batches")[0]
+        self.assertEqual((batch["state"], batch["payload"], batch["error"]), ("done", None, ""))
+        self.assertFalse(self.state.rows("SELECT * FROM operations"))
+
+    def test_process_rejects_sources_not_supplied_to_the_model(self):
+        gtd.atomic_json(self.state.base / "config.json", {"memory_source_enabled": False})
+        self.events.write_text(json.dumps(self.event()) + "\n")
+        gtd.spool(self.state, self.history)
+        before = self.pending()[0]["payload"]
+        with patch.object(gtd, "extractor_command", return_value=["fixture"]), \
+             patch.object(gtd, "run_extractor", return_value=self.analysis("memory:not-supplied")):
+            with self.assertRaisesRegex(ValueError, "Candidate cites an event outside this batch"):
+                gtd.process(self.state, limit=1, notifications=False)
+        self.assertEqual(self.pending()[0]["payload"], before)
+        self.assertEqual(self.pending()[0]["error"], "Candidate cites an event outside this batch")
+        self.assertFalse(self.state.rows("SELECT * FROM candidates"))
+
     def test_timezone_defaults_to_system_and_invalid_config_falls_back(self):
         expected = gtd.gtd_sources.local_timezone_name()
         self.assertEqual(gtd.gtd_sources.timezone_name({}), expected)

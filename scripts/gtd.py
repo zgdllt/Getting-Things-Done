@@ -386,14 +386,15 @@ def extractor_command(state, config_home=None, schema=None):
     return command + ["--cd", str(state.base), "-"]
 
 
-def analyze(state, events):
+def analyze(state, events, *, analysis_events=None):
     current = state.rows("SELECT key,title,bucket,project,suggested_due,state,target_id,updated_at FROM candidates")
     questions = state.rows("SELECT key,candidate_key,question,state,answer FROM questions")
     native_path = state.base / "last-snapshot.json"
     system = json.loads(native_path.read_text()) if native_path.exists() else {}
     config = state.config()
     timezone = gtd_sources.timezone_name(config)
-    analysis_events = gtd_sources.analysis_records(events, config)
+    if analysis_events is None:
+        analysis_events = gtd_sources.analysis_records(events, config)
     context = {
         "now": dt.datetime.now(gtd_sources.ZoneInfo(timezone)).isoformat(),
         "timezone": timezone,
@@ -517,7 +518,12 @@ def process(state, limit=None, notifications=True):
         for batch in pending[:limit] if limit is not None else pending:
             events = json.loads(batch["payload"])
             try:
-                ingest(state, batch["id"], analyze(state, events), events)
+                # Summaries and recalled memories have their own source IDs.
+                # Resolve them once so inference, validation and persistence all
+                # use exactly the same evidence, even if a memory changes.
+                analysis_events = gtd_sources.analysis_records(events, state.config())
+                value = analyze(state, events, analysis_events=analysis_events)
+                ingest(state, batch["id"], value, analysis_events)
             except Exception as error:
                 with state.db:
                     state.db.execute("UPDATE batches SET error=? WHERE id=?", (str(error), batch["id"]))
