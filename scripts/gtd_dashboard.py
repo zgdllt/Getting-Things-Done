@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 import gtd
 import gtd_clarify
 import gtd_models
+import gtd_options
 import gtd_sources
 import gtd_files
 
@@ -76,6 +77,14 @@ def dashboard_state(state):
         result = json.loads(job.pop("result") or "{}")
         job["summary"] = result.get("summary", "")
     resolutions = {row["candidate_key"]: row for row in state.rows("SELECT * FROM candidate_resolutions")}
+    questions = state.rows("SELECT * FROM questions ORDER BY created_at")
+    # Quick-fill answer options come from a cache. Missing ones are generated in a detached
+    # worker only when enabled (`quick_answers` in config.json), so fixtures never call a model.
+    if gtd_options.attach(state, questions) and state.config().get("quick_answers"):
+        try:
+            gtd_options.start(state)
+        except OSError:
+            pass
     for candidate in candidates:
         candidate["resolution"] = resolutions.get(candidate["key"])
     return {"ok": True, "at": gtd.now(), "timezone": gtd_sources.timezone_name(config),
@@ -86,7 +95,7 @@ def dashboard_state(state):
             "snapshot_status": read_json(state.base / "snapshot-status.json", {"ok": False, "error": "尚未读取系统清单"}),
             "hook": hook,
             "notifications": read_json(state.base / "notification-status.json", {}),
-            "candidates": candidates, "questions": state.rows("SELECT * FROM questions ORDER BY created_at"),
+            "candidates": candidates, "questions": questions,
             "batches": state.rows("SELECT id,created_at,state,summary FROM batches WHERE state='done' ORDER BY created_at DESC LIMIT 12"),
             "pending_batches": state.db.execute("SELECT COUNT(*) FROM batches WHERE state='pending'").fetchone()[0],
             "uncertain_writes": state.db.execute("SELECT COUNT(*) FROM operations WHERE state='pending'").fetchone()[0]}
