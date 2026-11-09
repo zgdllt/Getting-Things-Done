@@ -1,0 +1,18 @@
+{
+  "name": "GTD Band Bridge",
+  "icon": "icon.png",
+  "version": "0.3.0",
+  "description": "把 Getting Things Done 的澄清问题送到小米手环 9 / 9 NFC，在手环上点选模型生成的答案，或“否掉 / 稍后 / 到电脑处理”。仅监听本机 127.0.0.1:47913，访问需要令牌（配对码或 bridge.json 获取）；手环端不会写入提醒事项或日历。",
+  "author": "zgdllt",
+  "website": "https://github.com/zgdllt/Getting-Things-Done",
+  "entry": "gtd_band_bridge.wasm",
+  "wasi_version": 3,
+  "api_level": 4,
+  "permissions": [
+    "device",
+    "interconnect",
+    "register_interconnect_recv",
+    "http-server",
+    "thirdpartyapp"
+  ]
+}
