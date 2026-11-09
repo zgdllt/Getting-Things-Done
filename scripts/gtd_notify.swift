@@ -52,7 +52,7 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
 
     func workbenchURL(view: String = "today") -> URL? {
         guard let value = config(), let port = value["port"] as? Int, let token = value["token"] as? String else { return nil }
-        let selected = ["today", "inbox", "projects", "review"].contains(view) ? view : "today"
+        let selected = ["today", "inbox", "projects", "review", "files"].contains(view) ? view : "today"
         return URL(string: "http://127.0.0.1:\(port)/#access=\(token)&view=\(selected)")
     }
 
@@ -95,6 +95,7 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
             let settings = WKWebViewConfiguration()
             if verifyDirectory != nil { settings.websiteDataStore = .nonPersistent() }
             settings.userContentController.add(self, name: "gtdClipboard")
+            settings.userContentController.add(self, name: "gtdFilesPicker")
             let web = WKWebView(frame: .zero, configuration: settings)
             web.navigationDelegate = self; web.uiDelegate = self
             web.allowsBackForwardNavigationGestures = false
@@ -182,11 +183,23 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
         let origin = message.frameInfo.securityOrigin
-        guard message.name == "gtdClipboard", message.frameInfo.isMainFrame,
-              origin.protocol == "http", origin.host == "127.0.0.1", origin.port == config()?["port"] as? Int,
-              let text = message.body as? String else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        guard message.frameInfo.isMainFrame, origin.protocol == "http", origin.host == "127.0.0.1",
+              origin.port == config()?["port"] as? Int else { return }
+        if message.name == "gtdClipboard", let text = message.body as? String {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        } else if message.name == "gtdFilesPicker", message.body is [String: Any] {
+            let panel = NSOpenPanel()
+            panel.title = "选择要整理的文件或工作区"
+            panel.prompt = "加入资料工作区"
+            panel.canChooseFiles = true; panel.canChooseDirectories = true; panel.allowsMultipleSelection = true
+            panel.begin { result in
+                let detail: [String: Any] = ["paths": result == .OK ? panel.urls.map(\.path) : []]
+                guard let data = try? JSONSerialization.data(withJSONObject: detail),
+                      let encoded = String(data: data, encoding: .utf8) else { return }
+                self.webView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('gtd-files-picked',{detail:\(encoded)}))")
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
@@ -229,12 +242,12 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
             const style = getComputedStyle(marker);
             const feedback = {duration:window.TaskDeck?.feedbackDuration||0,hold:style.animationDelay,fade:style.animationDuration,reducedMotion:matchMedia('(prefers-reduced-motion:reduce)').matches};
             marker.remove();
-            return {heading:document.querySelector('h1')?.textContent||'',view:location.hash.slice(1),navCount:document.querySelectorAll('nav [data-view]').length,sessionReady:!location.hash.includes('access='),nativeClipboard:!!window.webkit?.messageHandlers?.gtdClipboard,feedback};
+            return {heading:document.querySelector('h1')?.textContent||'',view:location.hash.slice(1),navCount:document.querySelectorAll('nav [data-view]').length,sessionReady:!location.hash.includes('access='),nativeClipboard:!!window.webkit?.messageHandlers?.gtdClipboard,nativeFilesPicker:!!window.webkit?.messageHandlers?.gtdFilesPicker,feedback};
         })()
         """
         webView?.evaluateJavaScript(script) { result, error in
             guard let value = result as? [String: Any], let heading = value["heading"] as? String,
-                  ["今天，先做哪一件？", "先理清楚，再放进清单。", "目标要有落脚的下一步。", "停一下，让事情重新有序。"].contains(heading), value["sessionReady"] as? Bool == true else {
+                  ["今天，先做哪一件？", "先理清楚，再放进清单。", "目标要有落脚的下一步。", "停一下，让事情重新有序。", "按轻重缓急，找到手边的资料。"].contains(heading), value["sessionReady"] as? Bool == true else {
                 if attempt < 40 { DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { self.verifyIfRequested(attempt: attempt + 1) } }
                 return
             }

@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python -m unittest discover -s scripts -p 'test_*.py' -v
       - run: node --check web/app.js
+      - run: node --check web/files.js
       - run: node --check web/deck.js && node --check demos/toy/demo.js
       - run: python scripts/install.py --dest "$RUNNER_TEMP/gtd-skill"
 
@@ -35,6 +36,7 @@ jobs:
       - run: python -m playwright install --with-deps chromium
       - run: python scripts/verify_workbench_browser.py --artifacts .test-artifacts
       - run: python scripts/verify_cards_browser.py --artifacts .test-artifacts
+      - run: python scripts/verify_files_browser.py --artifacts .test-artifacts/files
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -68,3 +70,5 @@ jobs:
           PY
       - name: Build and audit a portable app archive
         run: python scripts/package_release.py --app-only --output "$RUNNER_TEMP/gtd-release"
+      - name: Verify Finder tags using temporary files only
+        run: python scripts/verify_file_tags_native.py

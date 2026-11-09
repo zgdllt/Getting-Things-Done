@@ -1,0 +1,312 @@
+<template>
+  <div class="page">
+    <div class="view" if="{{current === null}}">
+      <text class="brand">GTD</text>
+      <text class="status {{linkClass}}">{{linkText}}</text>
+      <text class="diag">收{{rx}}({{rxType}}) 发{{tx}} 败{{txFail}} 码{{failCode}}</text>
+      <text class="idle">{{idleText}}</text>
+      <div class="test" onclick="sayHello"><text class="test-label">测试连接</text></div>
+    </div>
+    <div class="view" if="{{current !== null}}">
+      <text class="title">{{current.title || 'GTD 有个问题'}}</text>
+      <text class="counter" if="{{queue.length > 1}}">还有 {{queue.length - 1}} 条</text>
+      <scroll class="body {{hasOptions ? 'body-short' : ''}}" scroll-y="true">
+        <div class="column" style="height:{{bodyHeight}}px;">
+          <text class="question {{hasOptions ? 'question-small' : ''}}" style="height:{{bodyHeight}}px;">{{current.question}}</text>
+        </div>
+      </scroll>
+      <div class="option" for="{{current.options}}" style="top:{{204 + $idx * 54}}px;" onclick="pick($idx)">
+        <text class="option-label">{{$item}}</text>
+      </div>
+      <div class="mini dismiss" style="left:8px;" if="{{hasOptions}}" onclick="answer('dismiss')"><text class="mini-label">否掉</text></div>
+      <div class="mini later" style="left:68px;" if="{{hasOptions}}" onclick="answer('later')"><text class="mini-label">稍后</text></div>
+      <div class="mini mac" style="left:128px;" if="{{hasOptions}}" onclick="answer('mac')"><text class="mini-label">电脑</text></div>
+      <div class="choice dismiss" style="top:300px;" if="{{!hasOptions}}" onclick="answer('dismiss')"><text class="choice-label">否掉</text></div>
+      <div class="choice later" style="top:362px;" if="{{!hasOptions}}" onclick="answer('later')"><text class="choice-label">稍后</text></div>
+      <div class="choice mac" style="top:424px;" if="{{!hasOptions}}" onclick="answer('mac')"><text class="choice-label">到电脑处理</text></div>
+    </div>
+    <div class="hint" if="{{hint}}"><text class="hint-text">{{hint}}</text></div>
+  </div>
+</template>
+
+<style>
+.page {width:192px;height:490px;background-color:#000000;}
+.view {position:absolute;left:0px;top:0px;width:192px;height:490px;flex-direction:column;}
+.brand {position:absolute;left:16px;top:64px;width:160px;height:48px;font-size:40px;color:#ffffff;text-align:center;}
+.status {position:absolute;left:8px;top:132px;width:176px;height:24px;font-size:16px;text-align:center;lines:1;}
+.ok {color:#2fc86a;}
+.waiting {color:#e6ad4a;}
+.bad {color:#ff5364;}
+.diag {position:absolute;left:4px;top:160px;width:184px;height:22px;font-size:14px;color:#6f7079;text-align:center;lines:1;}
+.idle {position:absolute;left:12px;top:200px;width:168px;height:60px;font-size:20px;line-height:28px;color:#a4a5ac;text-align:center;lines:2;}
+.test {position:absolute;left:24px;top:400px;width:144px;height:52px;border-radius:26px;background-color:#202127;align-items:center;justify-content:center;}
+.test-label {width:132px;font-size:20px;color:#ffffff;text-align:center;}
+.title {position:absolute;left:12px;top:24px;width:168px;height:26px;font-size:18px;color:#a4a5ac;lines:1;}
+.counter {position:absolute;left:12px;top:274px;width:168px;height:20px;font-size:14px;color:#6f7079;text-align:right;}
+.body {position:absolute;left:12px;top:58px;width:168px;height:212px;}
+.column {width:168px;flex-direction:column;}
+.question {width:168px;font-size:20px;line-height:28px;color:#ffffff;lines:-1;flex-shrink:0;}
+.body-short {top:52px;height:140px;}
+.question-small {font-size:18px;line-height:24px;}
+.option {position:absolute;left:8px;width:176px;height:46px;border-radius:23px;background-color:#2b6cd6;align-items:center;justify-content:center;}
+.option-label {width:164px;font-size:18px;color:#ffffff;text-align:center;lines:1;}
+.mini {position:absolute;top:378px;width:56px;height:56px;border-radius:28px;align-items:center;justify-content:center;}
+.mini-label {width:52px;font-size:16px;color:#ffffff;text-align:center;}
+.choice {position:absolute;left:12px;width:168px;height:54px;border-radius:27px;align-items:center;justify-content:center;}
+.choice-label {width:156px;font-size:20px;color:#ffffff;text-align:center;}
+.dismiss {background-color:#fa4258;}
+.later {background-color:#3a3b44;}
+.mac {background-color:#1677ff;}
+.hint {position:absolute;left:16px;top:200px;width:160px;height:64px;border-radius:20px;background-color:#202127;align-items:center;justify-content:center;}
+.hint-text {width:148px;font-size:18px;color:#ffffff;text-align:center;lines:2;}
+</style>
+
+<script>
+import interconnect from "@system.interconnect"
+import vibrator from "@system.vibrator"
+
+// Frames are {"v":1,"type":...} objects on the band; the plugin also accepts
+// JSON strings. The plugin is the source of truth for unanswered questions and
+// resends them after every hello.
+const CHARS_PER_LINE = 8
+const LINE_HEIGHT = 28
+const HELLO_INTERVAL_MS = 15000
+// Answered ids are remembered until the plugin acks them, so a resend that
+// crosses an answer in flight cannot bring the question back.
+const ANSWERED_TTL_MS = 10 * 60 * 1000
+const CHOICE_HINT = { dismiss: "已否掉", later: "稍后再问", mac: "已转到电脑", option: "已回答" }
+const MAX_OPTIONS = 3
+
+export default {
+  private: {
+    queue: [],
+    current: null,
+    bodyHeight: 212,
+    linkText: "未连接电脑",
+    linkClass: "waiting",
+    idleText: "暂无待澄清问题",
+    hint: "",
+    hasOptions: false,
+    rx: 0,
+    rxType: "-",
+    tx: 0,
+    txFail: 0,
+    failCode: "-"
+  },
+
+  onInit() {
+    this.conn = null
+    this.helloTimer = null
+    this.hintTimer = null
+    this.lastHeardAt = 0
+    this.answered = {}
+    this.useStringData = false
+    this.setupInterconnect()
+    this.sayHello()
+    const self = this
+    this.helloTimer = setInterval(function () { self.sayHello() }, HELLO_INTERVAL_MS)
+  },
+
+  onDestroy() {
+    if (this.helloTimer) clearInterval(this.helloTimer)
+    if (this.hintTimer) clearTimeout(this.hintTimer)
+    if (this.conn) {
+      this.conn.onmessage = null
+      this.conn.onopen = null
+      this.conn.onclose = null
+      this.conn.onerror = null
+    }
+  },
+
+  setupInterconnect() {
+    const self = this
+    try {
+      self.conn = interconnect.instance()
+    } catch (e) {
+      self.conn = null
+    }
+    if (!self.conn) {
+      self.setLink("互联不可用", "bad")
+      return
+    }
+    // Firmware delivers either the string itself or { data: string }.
+    self.conn.onmessage = function (message) {
+      self.rx += 1
+      self.receive(typeof message === "string" ? message : (message ? message.data : null))
+    }
+    self.conn.onopen = function () { self.sayHello() }
+    self.conn.onclose = function () { self.setLink("连接已断开", "bad") }
+    self.conn.onerror = function () { self.setLink("连接出错", "bad") }
+  },
+
+  send(frame, onFail, onSuccess, retried) {
+    const self = this
+    if (!self.conn) self.setupInterconnect()
+    if (!self.conn) {
+      self.noteFailure("no-conn")
+      if (onFail) onFail()
+      return
+    }
+    frame.v = 1
+    // The documented type of `data` is Object; Band 9 NFC rejects strings with
+    // 202 (invalid parameter). Other firmware has been reported to want a JSON
+    // string, so fall back once on 202 and remember what worked.
+    const payload = self.useStringData ? JSON.stringify(frame) : frame
+    try {
+      self.conn.send({
+        data: payload,
+        success: function () {
+          self.tx += 1
+          if (onSuccess) onSuccess()
+        },
+        fail: function (data, code) {
+          const value = typeof code === "number" ? code : (data && data.code !== undefined ? data.code : "?")
+          if (Number(value) === 202 && !retried) {
+            self.useStringData = !self.useStringData
+            self.send(frame, onFail, onSuccess, true)
+            return
+          }
+          self.noteFailure(value)
+          // 1006: link closed. Drop the instance so the next send re-acquires it.
+          if (Number(value) === 1006) self.conn = null
+          if (onFail) onFail()
+        }
+      })
+    } catch (e) {
+      self.conn = null
+      self.noteFailure("ex")
+      if (onFail) onFail()
+    }
+  },
+
+  noteFailure(code) {
+    this.txFail += 1
+    this.failCode = String(code)
+    this.setLink("发送失败", "bad")
+  },
+
+  sayHello() {
+    if (Date.now() - this.lastHeardAt > HELLO_INTERVAL_MS * 2) this.setLink("正在连接电脑…", "waiting")
+    this.send({ type: "hello", pending: this.queue.length })
+  },
+
+  receive(raw) {
+    let frame = raw
+    try {
+      if (typeof frame === "string") frame = JSON.parse(frame)
+    } catch (e) {
+      return
+    }
+    if (!frame || frame.v !== 1) return
+    this.rxType = String(frame.type || "?")
+    this.lastHeardAt = Date.now()
+    this.setLink("已连接电脑", "ok")
+    if (frame.type === "ask") this.enqueue(frame)
+    else if (frame.type === "withdraw") this.remove(frame.id)
+    else if (frame.type === "ack") delete this.answered[frame.id]
+    else if (frame.type === "ping") {
+      this.send({ type: "pong", ts: frame.ts })
+      this.showHint("连接正常")
+      this.buzz("short")
+    }
+  },
+
+  enqueue(frame) {
+    if (!frame.id || !frame.question) return
+    this.pruneAnswered()
+    if (this.answered[frame.id]) return
+    const exists = this.queue.some(function (q) { return q.id === frame.id })
+    if (exists) return
+    const options = Array.isArray(frame.options)
+      ? frame.options.filter(function (o) { return typeof o === "string" && o.length > 0 }).slice(0, MAX_OPTIONS)
+      : []
+    this.queue.push({ id: frame.id, title: frame.title || "", question: frame.question, options: options, shownAt: 0 })
+    if (this.current === null) {
+      this.showNext()
+      this.buzz("long")
+    }
+  },
+
+  remove(id) {
+    this.queue = this.queue.filter(function (q) { return q.id !== id })
+    if (this.current && this.current.id === id) this.showNext()
+  },
+
+  showNext() {
+    if (this.queue.length === 0) {
+      this.current = null
+      return
+    }
+    const next = this.queue[0]
+    if (!next.shownAt) {
+      next.shownAt = Date.now()
+      this.send({ type: "shown", id: next.id, shownAt: next.shownAt })
+    }
+    // With options the question is set smaller (18px, ~9 chars per line).
+    this.hasOptions = next.options.length > 0
+    const perLine = this.hasOptions ? 9 : CHARS_PER_LINE
+    const lineHeight = this.hasOptions ? 24 : LINE_HEIGHT
+    const lines = Math.ceil(next.question.length / perLine) + 1
+    this.bodyHeight = Math.max(this.hasOptions ? 140 : 212, lines * lineHeight)
+    this.current = next
+  },
+
+  pick(index) {
+    const item = this.current
+    if (!item || !item.options[index]) return
+    this.answer("option", index)
+  },
+
+  answer(choice, index) {
+    const item = this.current
+    if (!item) return
+    const self = this
+    const frame = { type: "answer", id: item.id, choice: choice, shownAt: item.shownAt, answeredAt: Date.now() }
+    if (choice === "option") {
+      frame.option = index
+      frame.text = item.options[index]
+    }
+    this.answered[item.id] = Date.now()
+    this.queue = this.queue.slice(1)
+    this.showNext()
+    this.send(
+      frame,
+      function () {
+        // Put it back so it can be answered again once the link recovers.
+        delete self.answered[item.id]
+        const queued = self.queue.some(function (q) { return q.id === item.id })
+        if (!queued) self.queue.unshift(item)
+        self.showNext()
+        self.showHint("未发送，请重试")
+      },
+      function () { self.showHint(CHOICE_HINT[choice]) }
+    )
+  },
+
+  pruneAnswered() {
+    const cutoff = Date.now() - ANSWERED_TTL_MS
+    const answered = this.answered
+    Object.keys(answered).forEach(function (id) {
+      if (answered[id] < cutoff) delete answered[id]
+    })
+  },
+
+  setLink(text, cls) {
+    this.linkText = text
+    this.linkClass = cls
+  },
+
+  showHint(text) {
+    const self = this
+    this.hint = text
+    if (this.hintTimer) clearTimeout(this.hintTimer)
+    this.hintTimer = setTimeout(function () { self.hint = "" }, 1200)
+  },
+
+  buzz(mode) {
+    try {
+      vibrator.vibrate({ mode: mode })
+    } catch (e) {}
+  }
+}
+</script>

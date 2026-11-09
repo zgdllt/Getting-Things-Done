@@ -91,3 +91,4 @@ dialog .display-option{display:flex;align-items:center;gap:10px;padding:14px;bor
   .deck-caption .eyebrow{font-size:8px;letter-spacing:.9px}
   .display-options{grid-template-columns:1fr}
 }
+.quick-answers{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.quick-answer{background:var(--green-pale);color:var(--green);border:1px solid #cfdcc8;border-radius:999px;padding:4px 12px;font-size:13px;line-height:1.5}.quick-answer:hover{background:var(--lime)}

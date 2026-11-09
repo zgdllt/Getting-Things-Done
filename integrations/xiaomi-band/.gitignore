@@ -1,0 +1,6 @@
+dist/
+plugin/target/
+watch/build/
+watch/dist/
+watch/node_modules/
+.temp_watch/

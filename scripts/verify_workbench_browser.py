@@ -28,6 +28,7 @@ def run(artifacts=None, browser_executable=None):
                 "calendars":[],"reminders":[{"id":"fixture-reminder","title":"整理本周计划","list":"个人行动","list_id":"fixture-list","due":{"value":today,"all_day":True},"completed":False,"modified_at":"v1","notes":"合成验证事项"}],
                 "events":[{"id":"fixture-event","title":"产品演示 · 原型评审","calendar":"学习","start":today+"T14:00:00+08:00","end":today+"T15:00:00+08:00","all_day":False,"location":"图书馆"}]}
         gtd.atomic_json(base/"last-snapshot.json",native);gtd.atomic_json(base/"snapshot-status.json",{"ok":True})
+        gtd.atomic_json(base/"hook-status.json",{"state":"needs_attention","error":"Candidate cites an event outside this batch"})
         server=web.Server(("127.0.0.1",0),base,"fixture-token")
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         writes=[];workers=[];model_calls=[];fail_next=[False]
@@ -76,11 +77,20 @@ def run(artifacts=None, browser_executable=None):
                 settings=page.locator('#app-settings')
                 assert settings.bounding_box()['x']<222
                 settings.click();page.get_by_role('heading',name='应用设置',exact=True).wait_for()
+                expect(page.locator('#hook-status span')).to_have_text('历史整理已暂停')
+                expect(page.locator('[data-history-error]')).to_contain_text('来源引用校验失败')
+                expect(page.locator('[data-history-error]')).to_contain_text('待整理 0 批')
                 # The dedicated cards scenario tests the new default. Keep the
                 # original bulk-flow regression in the selectable list mode.
                 page.locator('input[name=task_display][value=list]').check()
                 page.get_by_role('button',name='保存展示设置').click()
+                expect(page.locator('dialog')).not_to_be_visible()
+                gtd.atomic_json(base/"hook-status.json",{"state":"watching"})
+                page.evaluate("load()")
+                expect(page.locator('#hook-status span')).to_have_text('正在接收新线索')
                 settings.click()
+                expect(page.locator('[data-history-error]')).to_have_count(0)
+                expect(page.locator('#hook-status')).to_have_attribute('title','')
                 expect(page.locator('#model-choice')).to_have_value('gpt-6.1-terra')
                 expect(page.locator('#reasoning-choice')).to_have_value('high')
                 page.screenshot(path=str(artifacts/'workbench-fixture-settings.png'),full_page=True)

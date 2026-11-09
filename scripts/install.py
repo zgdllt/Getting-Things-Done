@@ -10,12 +10,17 @@ PAYLOAD = (
     "SKILL.md", "README.md", "LICENSE", "agents/openai.yaml",
     "references/analysis.schema.json", "references/extractor.md",
     "references/clarification.schema.json", "references/clarification.md",
+    "references/options.schema.json", "references/options.md",
     "references/native-operations.md", "references/source-adapters.md", "references/workbench.md", "references/verification.md",
+    "references/file-organization.md", "references/files-extractor.md", "references/files.schema.json",
     "scripts/gtd.py", "scripts/gtd_native.swift", "scripts/gtd_dashboard.py",
-    "scripts/gtd_models.py", "scripts/gtd_sources.py", "scripts/gtd_clarify.py",
+    "scripts/gtd_models.py", "scripts/gtd_sources.py", "scripts/gtd_clarify.py", "scripts/gtd_options.py",
+    "scripts/gtd_files.py", "scripts/gtd_file_store.py", "scripts/gtd_projects.py",
     "scripts/gtd_notifications.py", "scripts/gtd_notify.swift", "scripts/install.py",
-    "scripts/test_gtd.py", "scripts/test_workbench.py", "scripts/verify_workbench_browser.py",
+    "scripts/test_gtd.py", "scripts/test_workbench.py", "scripts/test_options.py", "scripts/verify_workbench_browser.py",
+    "scripts/test_files.py", "scripts/verify_files_browser.py", "scripts/verify_file_tags_native.py",
     "web/index.html", "web/app.js", "web/deck.js", "web/style.css", "web/icon.svg",
+    "web/files.js", "web/files.css",
 )
 
 
