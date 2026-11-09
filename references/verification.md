@@ -59,6 +59,12 @@ The final success-feedback checks cover complete, dismiss, save and restore mark
 
 Two additional integration tests exercise the real `process → analyze → ingest` path: normalized current and retrospective summaries remain valid through persistence even when a memory changes during inference, while a source absent from the model input is still rejected without consuming its batch. The isolated Python suite now contains 49 tests. The workbench browser scenario also checks the explicit paused-history label, translated source-validation error and pending count in Settings, and removal of the error after recovery. These checks use fake extraction/native operations and do not process real history.
 
+## Finder-tag file organization (source update after v0.5.1)
+
+The current source adds isolated file-organization regressions and a browser scenario for selecting workspaces, preserving recursion choices during polling, editing suggestions, preview-before-write, native-tag receipts, filtering, undo, shared display styles and mobile layout. Fixture operations do not write real user files or Apple task records. `verify_file_tags_native.py` uses temporary files to check custom tag colors, preserving later unrelated tags, stale previews, symlinks and actual file-change events.
+
+An additional temporary-workspace check covered a file arriving during inference and confirmed that saving the organizer's state did not cause another model call. One real `gpt-6.1-terra / high` call used synthetic metadata and task context, returned suggestions and abstention, and wrote neither tags nor formal tasks. Packaged WebView acceptance includes the fifth navigation entry and the native file-picker bridge. Scope, ownership and limits are documented in [file organization](file-organization.md).
+
 ## Explicit limits
 
 - Fixture writes prove state transitions and write receipts, not successful writes into every user's Apple account.

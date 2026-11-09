@@ -17,12 +17,14 @@ import subprocess
 import sys
 import time
 import uuid
+from urllib.parse import parse_qs, urlsplit
 from zoneinfo import ZoneInfo
 
 import gtd
 import gtd_clarify
 import gtd_models
 import gtd_sources
+import gtd_files
 
 LABEL = "local.codex.personal-gtd.workbench"
 WEB = gtd.SKILL / "web"
@@ -155,6 +157,37 @@ def prepare(state, data):
 
 
 def action(state, route, data):
+    if route == "/api/files/register":
+        if "recursive" in data:
+            raise gtd_files.DeprecatedFilesProtocol("递归扫描接口已废弃，请更新 App；添加文件夹只整理文件夹本身")
+        paths = data.get("paths")
+        if not isinstance(paths, list) or not paths:
+            raise ValueError("请选择文件或文件夹")
+        return gtd_files.request(state, paths)
+    if route == "/api/files/projects":
+        return gtd_files.sync_projects(state, resume=data.get("resume", False))
+    if route == "/api/files/pause":
+        return gtd_files.stop(state)
+    if route == "/api/files/resume":
+        return gtd_files.resume_worker(state)
+    if route == "/api/files/cache/clear":
+        return gtd_files.clear_cache(state, data.get("archives", []), data.get("reset_index", False))
+    if route == "/api/files/scan":
+        raise gtd_files.DeprecatedFilesProtocol("旧扫描接口已废弃，请更新 App 并使用刷新建议")
+    if route == "/api/files/refresh":
+        return gtd_files.request(state)
+    if route == "/api/files/edit":
+        return gtd_files.edit(state, data)
+    if route == "/api/files/prepare":
+        return gtd_files.prepare(state, data.get("item_ids", []))
+    if route == "/api/files/commit":
+        return gtd_files.commit(state, data["plan_id"])
+    if route == "/api/files/undo":
+        return gtd_files.commit(state, data["operation_id"], undo=True)
+    if route == "/api/files/open":
+        return gtd_files.open_item(state, data.get("item_id"), data.get("reveal", False))
+    if route == "/api/files/remove":
+        return gtd_files.remove_scope(state, data.get("scope_id"))
     if route == "/api/capture":
         return gtd.capture(state, nonempty(data, "text"))
     if route == "/api/answers":
@@ -288,6 +321,8 @@ class Handler(BaseHTTPRequestHandler):
         assets = {"/": ("index.html", "text/html; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/deck.js": ("deck.js", "text/javascript; charset=utf-8"),
+                  "/files.js": ("files.js", "text/javascript; charset=utf-8"),
+                  "/files.css": ("files.css", "text/css; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"),
                   "/icon.svg": ("icon.svg", "image/svg+xml")}
         if route in assets:
@@ -295,11 +330,15 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (WEB / path).read_bytes(), kind)
         if not self.authenticated():
             return self.send(401, {"error": "请从桌面「Getting Things Done」入口打开工作台"})
-        if route not in ("/api/state", "/api/models"):
+        if route not in ("/api/state", "/api/models", "/api/files"):
             return self.send(404, {"error": "页面不存在"})
         state = gtd.State(self.server.base)
         try:
-            self.send(200, gtd_models.catalog(state) if route == "/api/models" else dashboard_state(state))
+            query = {key: values[-1] for key, values in parse_qs(urlsplit(self.path).query).items()}
+            self.send(200, gtd_models.catalog(state) if route == "/api/models"
+                      else gtd_files.snapshot(state, query) if route == "/api/files" else dashboard_state(state))
+        except ValueError as error:
+            self.send(400, {"error": str(error)})
         finally:
             state.db.close()
 
@@ -325,6 +364,8 @@ class Handler(BaseHTTPRequestHandler):
         state = gtd.State(self.server.base)
         try:
             self.send(200, action(state, self.path, data))
+        except gtd_files.DeprecatedFilesProtocol as error:
+            self.send(410, {"error": str(error)})
         except gtd.ProcessorBusy:
             self.send(409, {"error": "另一项系统写入正在进行，稍后可重试本次操作"})
         except (ValueError, KeyError) as error:
@@ -432,6 +473,8 @@ def main():
     conf = configuration(state.base)
     if state.db.execute("SELECT 1 FROM answer_jobs WHERE state IN ('pending','processing')").fetchone():
         gtd_clarify.start(state)
+    if gtd_files.read(state)["scopes"]:
+        gtd_files.launch(state)
     state.db.close()
     with Server(("127.0.0.1", conf["port"]), args.state, conf["token"]) as server:
         server.serve_forever(poll_interval=0.5)

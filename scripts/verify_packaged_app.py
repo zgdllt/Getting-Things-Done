@@ -67,7 +67,8 @@ def verify(archive, service_override=False):
                     log.seek(0)
                     raise RuntimeError("Packaged app did not render: " + log.read()[-2500:])
                 view = json.loads(receipt.read_text())
-                assert view["sessionReady"] and view["navCount"] == 4 and view["view"] == "today", view
+                assert view["sessionReady"] and view["navCount"] == 5 and view["view"] == "today", view
+                assert view["nativeFilesPicker"], view
                 feedback = view["feedback"]
                 assert feedback["duration"] == 700, feedback
                 if not feedback["reducedMotion"]:

@@ -7,7 +7,9 @@
   <title>Getting Things Done · 留一点心力给当下</title>
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/files.css">
   <script src="/deck.js" defer></script>
+  <script src="/files.js" defer></script>
   <script src="/app.js" defer></script>
 </head>
 <body>
@@ -19,6 +21,7 @@
       <button data-view="inbox"><span class="nav-symbol">▤</span>待澄清<span id="inbox-count" class="badge">—</span></button>
       <button data-view="projects"><span class="nav-symbol">◈</span>项目与等待</button>
       <button data-view="review"><span class="nav-symbol">↺</span>回顾</button>
+      <button data-view="files"><span class="nav-symbol">▱</span>资料</button>
     </nav>
     <div class="sidebar-bottom">
       <button id="app-settings" class="settings-button" aria-label="应用设置"><span aria-hidden="true">⚙</span><span>设置<small id="settings-model-summary">gpt-6.1-terra · high</small></span></button>

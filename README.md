@@ -35,6 +35,7 @@ Observed activity is a clue. It does not automatically become a commitment, a de
 | Clarify | Candidate summaries, source excerpts, questions, saved answers, batch preview |
 | Projects & Waiting | Confirmed projects and their linked system actions; active waiting items |
 | Review | Unprocessed clues, unresolved questions, overdue actions, upcoming events and recent summaries |
+| Files (current source update) | Selected workspaces, suggested Finder priority tags, preview, confirmed application and undo |
 
 Notifications name the specific item and the question, and open the native app's clarification view. The app uses AppKit and the system WebKit engine. There is no bundled Chromium runtime, frontend framework, external font or CDN.
 
@@ -49,6 +50,22 @@ A standalone, synthetic-data **Bilibili Toy demo** is available in [demos/toy](d
 **Save answers and organize** first saves the answers, then immediately starts a separate model job. It does not wait for the history backlog. Each card shows progress, a reply and revised next action, or a focused follow-up question. A clearly finished/dropped local candidate can be closed; formal Reminders are never completed by model inference. Failed jobs keep their answers and offer retry. Older saved answers have an **Organize using answers** action as well.
 
 Each submitted answer batch can make an additional model call. Opening Settings, saving model preferences and browsing already-generated replies do not call a model. The v0.5.1 download includes these settings, immediate replies, source adapters, local history recall and swipeable cards.
+
+## Finder tags for your files (current source update)
+
+Open **资料** to start with deduplicated local **Codex project root folders**, then add other files or folders with the native picker. Each selected root is one item: children are never enumerated. The agent uses names, existing tags, project activity and confirmed task context; file and conversation bodies are not uploaded. Existing tags and file locations are preserved.
+
+**Green means completed**, independently of Reminders completion. Initial editable mappings use red for important/urgent, yellow for important/not urgent, orange for urgent/less important, and gray for later. Open **Settings → 资料标签 → 颜色与程度设置** to map these categories to your existing Finder tags. The model cannot create new tag names.
+
+Review each suggestion, select a batch, preview and explicitly confirm. The app reads back the saved native tags and provides per-file results. Undo removes only that operation's additions, retaining other tags added later; changed file identity or tag colors are reported for review. You can filter by tag, open a file or reveal it in Finder. This view follows the existing card/list display setting.
+
+Gray is suggested after a configurable inactivity period (30 days by default), or when activity evidence is insufficient, following the user's chosen fallback. It does not assert that inactivity has been proven. Existing green completion tags take precedence. FSEvents records root activity without creating descendant items or launching a model for every build event. Suggestions use the existing GTD model settings and provider quota; browsing, filtering, deterministic gray suggestions, applying and undoing do not call a model.
+
+Suggestions use an independent SQLite index with server-side pagination and search (40 items per UI page). **Settings → 资料整理与缓存** shows its directory and size, lets you clear quarantined legacy scans, and optionally resets the current index while retaining selected roots, settings and tag undo receipts. Original files, Finder tags and system tasks are untouched. **暂停整理** stops the organizer process group, including model children, and persists across service restarts; the ordinary GTD history service remains separate.
+
+The cache directory is `~/.codex/personal-gtd/file-organizer/` by default. `library-paused-*.json` files are quarantined legacy scans, never restored automatically. Do not remove the whole `personal-gtd` directory. See [cache cleanup commands and boundaries](references/file-organization.md#取消与缓存清理).
+
+This feature is a working source update after the v0.5.1 download. See [design and validation](references/file-organization.md).
 
 ## Requirements
 
@@ -154,11 +171,15 @@ Runtime Python code uses the standard library. Browser verification is a develop
 ```bash
 python3 -m unittest discover -s scripts -p 'test_*.py' -v
 node --check web/app.js
+node --check web/files.js
 
 python3 -m venv .venv
 .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/python -m playwright install chromium
 .venv/bin/python scripts/verify_workbench_browser.py --artifacts .test-artifacts
+.venv/bin/python scripts/verify_files_browser.py --artifacts .test-artifacts/files
+# macOS only; uses temporary synthetic files, not your personal documents:
+python3 scripts/verify_file_tags_native.py
 ```
 
 Build release archives from a clean committed checkout on macOS:

@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "suggestions"],
+  "properties": {
+    "summary": {"type": "string"},
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "signature", "category", "reason"],
+        "properties": {
+          "item_id": {"type": "string"},
+          "signature": {"type": "string"},
+          "category": {"type": "string", "enum": ["important_urgent", "important", "urgent", "later", "done", "undecided"]},
+          "reason": {"type": "string"}
+        }
+      }
+    }
+  }
+}
