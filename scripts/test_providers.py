@@ -75,6 +75,16 @@ class ProviderProfileTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.save(id="other", base_url=url)
 
+    def test_remote_provider_requires_a_key_and_placeholder_is_replaced(self):
+        with self.assertRaises(ValueError):
+            self.save(id="public", base_url="https://zgdll.example/v1", api_key="")
+        self.assertFalse((self.state.base / "secrets" / "public.json").exists())
+        self.save(id="strata", base_url="http://127.0.0.1:18080/v1", api_key="")
+        with self.assertRaises(ValueError):  # moving a keyless profile to a remote address needs a key
+            self.save(id="strata", base_url="https://zgdll.example/v1", api_key="")
+        self.save(id="strata", base_url="https://zgdll.example/v1", api_key=SECRET)
+        self.assertEqual(self.stored("strata")["api_key"], SECRET)
+
     def test_new_ids_must_start_lowercase_and_values_are_validated(self):
         for bad in ("Upper", "1abc", "../x", "a b"):
             with self.assertRaises(ValueError):

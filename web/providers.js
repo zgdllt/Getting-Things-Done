@@ -47,7 +47,7 @@ window.GTDProviders = (() => {
       <label for="provider-url">API 地址</label><input id="provider-url" required value="${value("base_url")}" placeholder="https://api.example.com/v1">
       <p class="field-hint">需使用 https；http 只允许本机地址（例如 SSH 隧道 http://127.0.0.1:18080/v1）。</p>
       <label>API 协议</label><p class="provider-fixed">OpenAI Chat Completions（兼容）</p>
-      <label for="provider-key">API 密钥</label><input id="provider-key" type="password" placeholder="${isNew ? "输入 API 密钥；本地无鉴权服务可留空" : (p.has_key ? "已保存，留空则保持不变" : "当前未设置；本地无鉴权服务可留空")}">
+      <label for="provider-key">API 密钥</label><input id="provider-key" type="password" value="${escape(fill.api_key ?? "")}" placeholder="${isNew ? "输入 API 密钥；本地无鉴权服务可留空" : (p.has_key ? "已保存，留空则保持不变" : "当前未设置；本地无鉴权服务可留空")}">
       <div class="provider-catalog-head"><label for="provider-model">模型</label><button class="button subtle" type="button" data-provider-action="models">获取可用模型</button></div>
       <input id="provider-model" required list="provider-model-list" value="${value("model")}" placeholder="选择或直接填写模型 ID">
       <datalist id="provider-model-list">${catalog.map(id => `<option value="${escape(id)}"></option>`).join("")}</datalist>

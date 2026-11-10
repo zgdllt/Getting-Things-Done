@@ -128,9 +128,16 @@ def save(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
         max_tokens = None
     elif not isinstance(max_tokens, int) or isinstance(max_tokens, bool) or not 256 <= max_tokens <= 200000:
         raise ValueError("最大输出 token 需为 256–200000 的整数，或留空")
+    base_url = validate_url(data.get("base_url"))
     with state.lock("configuration.lock", blocking=True):
         old = read_profile(path) or {}
-        key = data.get("api_key") or old.get("api_key") or NO_AUTH_KEY
+        stored = old.get("api_key") if old.get("api_key") != NO_AUTH_KEY else None
+        key = data.get("api_key") or stored
+        if not key:
+            # Only a server on this machine (e.g. an SSH tunnel) may run without a key.
+            if urlsplit(base_url).hostname not in LOOPBACK:
+                raise ValueError("请填写 API 密钥；只有本机地址（127.0.0.1 / localhost）可以不填")
+            key = NO_AUTH_KEY
         if not isinstance(key, str) or any(c.isspace() for c in key.strip()):
             raise ValueError("API Key 格式无效")
         extra = dict(old.get("extra_body") or {})
@@ -148,7 +155,7 @@ def save(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
         else:
             extra["max_tokens"] = max_tokens
         name = data.get("name") if isinstance(data.get("name"), str) and data["name"].strip() else path.stem
-        value = {**old, "name": name.strip(), "base_url": validate_url(data.get("base_url")),
+        value = {**old, "name": name.strip(), "base_url": base_url,
                  "api_key": key.strip(), "model": model.strip()}
         if extra:
             value["extra_body"] = extra
