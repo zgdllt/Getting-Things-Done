@@ -59,6 +59,20 @@ class OptionsTest(unittest.TestCase):
             self.assertEqual(gtd_options.process(self.state, limit=2)["generated"], 0)
         self.assertEqual(run.call_count, 3)
 
+    def test_parallel_process_fills_every_missing_question(self):
+        calls = []
+
+        def run(state, command, prompt, record):
+            calls.append(prompt)
+            return {"options": ["已完成", "继续等待"]}
+
+        with patch.object(gtd_options, "command", return_value=["codex"]):
+            result = gtd_options.process(self.state, workers=3, runner=run)
+        self.assertEqual(result["generated"], 3)
+        self.assertEqual(len(calls), 3)
+        for key in ("q0", "q1", "q2"):
+            self.assertEqual(gtd_options.cached(self.state, key), ["已完成", "继续等待"])
+
     def test_answered_questions_are_not_generated(self):
         with self.state.db:
             self.state.db.execute("UPDATE questions SET state='answered', answer='x' WHERE key='q0'")

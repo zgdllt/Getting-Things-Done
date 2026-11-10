@@ -23,6 +23,7 @@ import tomllib
 import uuid
 
 import gtd_models
+import gtd_provider
 import gtd_sources
 
 HERE = Path(__file__).resolve().parent
@@ -361,7 +362,22 @@ def ingest(state, batch_id, value, events):
                          (value["summary"], batch_id))
 
 
+PROVIDER_COMMAND = "@provider"
+
+
+def provider_file(state):
+    """Configured OpenAI-compatible provider (DeepSeek, Qwen, GLM, ...), or None for Codex."""
+    config = state.config()
+    if config.get("extractor_backend") != "provider":
+        return None
+    return Path(config.get("extractor_provider") or state.base / "secrets" / "provider.json").expanduser()
+
+
 def extractor_command(state, config_home=None, schema=None):
+    schema_path = schema or SKILL / "references" / "analysis.schema.json"
+    if provider_file(state):
+        # Same call sites, different transport: run_extractor dispatches on this marker.
+        return [PROVIDER_COMMAND, str(schema_path)]
     binary = shutil.which("codex")
     if not binary:
         raise RuntimeError("Codex CLI not found")
@@ -419,7 +435,24 @@ def analyze(state, events, *, analysis_events=None):
     return validate_analysis(value, analysis_events)
 
 
+def run_provider(state, command, prompt, record):
+    started = time.time()
+    provider = gtd_provider.load(provider_file(state))
+    schema = json.loads(Path(command[1]).read_text())
+    try:
+        value = gtd_provider.chat_json(provider, gtd_provider.schema_instruction(schema), prompt, timeout=240)
+    except gtd_provider.ProviderError as error:
+        raise RuntimeError("Provider extractor failed: " + str(error)) from error
+    usage = value.pop("_usage", {})
+    atomic_json(state.base / record, {"finished_at": now(), "seconds": round(time.time()-started, 2),
+                "model": provider["model"], "backend": "provider", "usage": usage,
+                "action_items": 0, "diagnostics": 0})
+    return value
+
+
 def run_extractor(state, command, prompt, record="last-extractor.json"):
+    if command and command[0] == PROVIDER_COMMAND:
+        return run_provider(state, command, prompt, record)
     started = time.time()
     environment = os.environ.copy()
     certificate = state.config().get("ca_certificate")

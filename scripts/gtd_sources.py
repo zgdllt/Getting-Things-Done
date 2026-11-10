@@ -409,8 +409,27 @@ def retrospective_summaries(config, raw_events, current_summaries=()):
     return records
 
 
+# Never sent to any model, whatever the source. Users extend this with `excluded_apps` in config.json.
+DEFAULT_EXCLUDED_APPS = ("com.1password.1password", "com.agilebits.onepassword7", "com.bitwarden.desktop",
+                         "com.apple.keychainaccess", "com.apple.Passwords")
+
+
+def excluded_apps(config):
+    return {value.lower() for value in (*DEFAULT_EXCLUDED_APPS, *((config or {}).get("excluded_apps") or []))}
+
+
+def is_excluded(event, excluded):
+    app = event.get("app") if isinstance(event.get("app"), dict) else {}
+    names = (app.get("bundleIdentifier"), app.get("name"))
+    return any(isinstance(name, str) and name.lower() in excluded for name in names)
+
+
 def analysis_records(raw_events, config):
-    """Use summaries for covered intervals and retain raw events only for gaps."""
+    """Use summaries for covered intervals and retain raw events only for gaps.
+
+    Events from excluded (sensitive) apps are dropped here, before any model call."""
+    excluded = excluded_apps(config)
+    raw_events = [event for event in raw_events if not is_excluded(event, excluded)]
     if not raw_events:
         return []
     summaries = memory_summaries(config, [item.get("timestamp") for item in raw_events])

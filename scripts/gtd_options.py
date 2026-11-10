@@ -12,6 +12,7 @@ runs in a detached worker (`start`) so the workbench never waits on the model.
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import logging
 import os
@@ -19,7 +20,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import gtd
 import gtd_models
@@ -33,7 +34,8 @@ MAX_WIDTH = 12.0          # CJK characters; ASCII counts as half
 MAX_OPTIONS = 3
 RETRY_FAILED_MINUTES = 30
 START_THROTTLE_SECONDS = 60
-BATCH_LIMIT = 6
+BATCH_LIMIT = 100
+WORKERS = 3
 RESERVED = ("否掉", "稍后", "到电脑", "电脑处理", "其他", "其它")
 
 SCHEMA_SQL = """
@@ -104,8 +106,9 @@ def context(state: gtd.State, question_key: str) -> Optional[Dict[str, Any]]:
 def command(state: gtd.State) -> List[str]:
     """The GTD extractor command with only the reasoning effort lowered."""
     cmd = gtd.extractor_command(state, schema=SCHEMA)
-    at = cmd.index("--cd")
-    cmd[at:at] = ["-c", "model_reasoning_effort=" + json.dumps(OPTIONS_EFFORT)]
+    if "--cd" in cmd:  # Codex backend only; providers have no reasoning-effort flag here
+        at = cmd.index("--cd")
+        cmd[at:at] = ["-c", "model_reasoning_effort=" + json.dumps(OPTIONS_EFFORT)]
     return cmd
 
 
@@ -122,26 +125,38 @@ def cached(state: gtd.State, question_key: str) -> Optional[List[str]]:
     return json.loads(row["options"])
 
 
-def generate(state: gtd.State, question_key: str, runner: Optional[Runner] = None) -> List[str]:
-    run = runner or gtd.run_extractor
+def prompt_for(state: gtd.State, question_key: str) -> Optional[str]:
     info = context(state, question_key)
     if info is None:
-        return []
-    prompt = PROMPT.read_text(encoding="utf-8") + "\n\nQUESTION_JSON:\n" + gtd.encode(info)
-    options: List[str] = []
-    error = ""
+        return None
+    return PROMPT.read_text(encoding="utf-8") + "\n\nQUESTION_JSON:\n" + gtd.encode(info)
+
+
+def ask(state: gtd.State, cmd: List[str], prompt: str, run: Runner) -> Tuple[List[str], str]:
+    """Model call only (no database access), so it can run in a worker thread."""
     try:
-        options = clean(run(state, command(state), prompt, "last-options.json").get("options"))
-        if not options:
-            error = "model returned no usable options"
+        options = clean(run(state, cmd, prompt, "last-options.json").get("options"))
+        return options, "" if options else "model returned no usable options"
     except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as e:
-        error = str(e)[:500]
+        return [], str(e)[:500]
+
+
+def store(state: gtd.State, question_key: str, options: List[str], error: str) -> None:
+    if error:
         logger.warning("option generation failed for %s: %s", question_key, error)
     with state.db:
         state.db.execute("INSERT OR REPLACE INTO band_options(question_key,options,model,created_at,error) "
                          "VALUES(?,?,?,?,?)",
                          (question_key, json.dumps(options, ensure_ascii=False),
                           gtd_models.selection(state)["model"], gtd.now(), error or None))
+
+
+def generate(state: gtd.State, question_key: str, runner: Optional[Runner] = None) -> List[str]:
+    prompt = prompt_for(state, question_key)
+    if prompt is None:
+        return []
+    options, error = ask(state, command(state), prompt, runner or gtd.run_extractor)
+    store(state, question_key, options, error)
     return options
 
 
@@ -189,16 +204,23 @@ def start(state: gtd.State) -> bool:
     return True
 
 
-def process(state: gtd.State, limit: int = BATCH_LIMIT) -> Dict[str, Any]:
+def process(state: gtd.State, limit: int = BATCH_LIMIT, workers: int = WORKERS,
+            runner: Optional[Runner] = None) -> Dict[str, Any]:
+    """Fill every missing option set: prompts and writes on this thread, model calls in parallel."""
     ensure_schema(state)
+    run = runner or gtd.run_extractor
     try:
         with state.lock("options.lock"):
+            todo = [key for key in open_keys(state) if cached(state, key) is None][:limit]
+            prompts = {key: prompt_for(state, key) for key in todo}
+            cmd = command(state)
             done = 0
-            for key in open_keys(state):
-                if done >= limit:
-                    break
-                if cached(state, key) is None:
-                    generate(state, key)
+            with concurrent.futures.ThreadPoolExecutor(max(1, workers)) as pool:
+                futures = {pool.submit(ask, state, cmd, prompt, run): key
+                           for key, prompt in prompts.items() if prompt is not None}
+                for future in concurrent.futures.as_completed(futures):
+                    options, error = future.result()
+                    store(state, futures[future], options, error)
                     done += 1
             return {"ok": True, "generated": done}
     except gtd.ProcessorBusy:
