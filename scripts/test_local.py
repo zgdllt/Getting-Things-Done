@@ -109,6 +109,22 @@ class ProviderTest(unittest.TestCase):
         self.assertEqual(value["options"], ["a", "b"])
         self.assertEqual(value["_usage"]["total_tokens"], 9)
 
+    def test_extra_body_is_merged_into_the_request(self):
+        body = {"choices": [{"message": {"content": "{}"}}]}
+        provider = {"base_url": "https://example.invalid/v1", "api_key": "k", "model": "m",
+                    "extra_body": {"max_tokens": 8000, "chat_template_kwargs": {"enable_thinking": False}}}
+        with patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(body).encode())) as call:
+            gtd_provider.chat_json(provider, "s", "u")
+        sent = json.loads(call.call_args.args[0].data)
+        self.assertEqual((sent["max_tokens"], sent["chat_template_kwargs"]), (8000, {"enable_thinking": False}))
+        self.assertEqual((sent["model"], len(sent["messages"])), ("m", 2))
+
+    def test_extra_body_cannot_replace_messages(self):
+        provider = {"base_url": "https://example.invalid/v1", "api_key": "k", "model": "m",
+                    "extra_body": {"messages": []}}
+        with self.assertRaises(gtd_provider.ProviderError):
+            gtd_provider.chat_json(provider, "s", "u")
+
     def test_client_errors_are_not_retried(self):
         error = urllib.error.HTTPError("u", 401, "no", {}, io.BytesIO(b"bad key"))
         with patch("urllib.request.urlopen", side_effect=error) as call, patch("time.sleep"):
@@ -187,6 +203,72 @@ class ProviderBackendTest(unittest.TestCase):
     def test_codex_remains_default(self):
         (Path(self.temp.name) / "config.json").write_text("{}")
         self.assertIsNone(gtd.provider_file(self.state))
+
+
+class BackfillTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.state = gtd.State(Path(self.temp.name) / "state")
+        # Keep the test away from any real memory summaries in the home directory.
+        gtd.atomic_json(self.state.base / "config.json", {"memory_source_enabled": False})
+        self.events = [gtd_local._record(f"/s/a.jsonl:{i}", iso(i), "agent.user_message", "local_codex_session",
+                                         "Codex", "thesis", f"周五前把第 {i} 稿发给导师") for i in range(3)]
+
+    def tearDown(self):
+        self.state.db.close()
+        self.temp.cleanup()
+
+    def extract(self, _state, _command, prompt):
+        context = json.loads(prompt.split("OBSERVED_DATA_JSON:\n", 1)[1])
+        keys = [event["event_key"] for event in context["events"]]
+        return {"summary": "合成", "questions": [],
+                "candidates": [{"key": "send-draft", "title": "把稿子发给导师", "bucket": "next",
+                                "project": "thesis", "suggested_due": None, "event_keys": keys}]}
+
+    def run_backfill(self, **kwargs):
+        with patch.object(gtd.gtd_local, "window", return_value=self.events) as window, \
+             patch.object(gtd, "extractor_command", return_value=["fixture"]), \
+             patch.object(gtd, "run_extractor", side_effect=self.extract):
+            return gtd.backfill(self.state, 3, **kwargs), window
+
+    def test_backfill_queues_local_history_and_extracts_candidates(self):
+        value, window = self.run_backfill(git_roots=["~/code"])
+        self.assertTrue(value["ok"])
+        self.assertEqual((value["events"], value["batches"], value["processed_batches"]), (3, 1, 1))
+        self.assertEqual(value["by_source"], {"local_codex_session": 3})
+        start, end, roots = window.call_args.args
+        self.assertAlmostEqual((end - start).total_seconds(), 3 * 86400, delta=1)
+        self.assertEqual(roots, [Path("~/code").expanduser()])
+        candidate = self.state.rows("SELECT key, state, evidence FROM candidates")[0]
+        self.assertEqual((candidate["key"], candidate["state"]), ("send-draft", "inbox"))
+        self.assertEqual(len(json.loads(candidate["evidence"])), 3)
+        self.assertFalse(self.state.rows("SELECT * FROM batches WHERE state='pending'"))
+
+    def test_backfill_runs_once_unless_forced(self):
+        self.run_backfill()
+        with self.assertRaises(ValueError):
+            self.run_backfill()
+        value, _ = self.run_backfill(force=True)
+        self.assertTrue(value["ok"])
+
+    def test_extractor_failure_keeps_batches_for_resume(self):
+        with patch.object(gtd.gtd_local, "window", return_value=self.events), \
+             patch.object(gtd, "extractor_command", return_value=["fixture"]), \
+             patch.object(gtd, "run_extractor", side_effect=RuntimeError("synthetic outage")):
+            value = gtd.backfill(self.state, 3)
+        self.assertFalse(value["ok"])
+        self.assertEqual(value["pending_batches"], 1)
+        self.assertIn("synthetic outage", value["error"])
+
+    def test_window_keeps_newest_events_past_the_cap(self):
+        events = [gtd_local._record(f"k{i}", iso(i), "git.commit", "local_git_commit", "git", "r", "c")
+                  for i in range(5)]
+        with patch.object(gtd_local, "MAX_EVENTS", 2), \
+             patch.object(gtd_local, "codex_events", return_value=events), \
+             patch.object(gtd_local, "claude_events", return_value=[]), \
+             patch.object(gtd_local, "git_events", return_value=[]):
+            kept = gtd_local.window(T0, T0 + dt.timedelta(hours=1))
+        self.assertEqual([event["event_key"] for event in kept], ["k3", "k4"])
 
 
 if __name__ == "__main__":

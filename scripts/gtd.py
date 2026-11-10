@@ -23,6 +23,7 @@ import tomllib
 import uuid
 
 import gtd_models
+import gtd_local
 import gtd_provider
 import gtd_sources
 
@@ -243,20 +244,29 @@ def project_event(event, path, offset):
     return gtd_sources.project_event(event, path, offset)
 
 
-def spool(state, root, baseline=False):
-    adapter = gtd_sources.history_adapter(state.config())
-    collected = adapter.collect(state, root, baseline)
-    records, cursors = collected["records"], collected["cursors"]
+BATCH_CHARS = 60000
+
+
+def chunk_records(records, limit=BATCH_CHARS):
+    """Split records into extractor batches of at most `limit` encoded characters."""
     batches, chunk, size = [], [], 0
     for record in records:
         record_size = len(encode(record))
-        if chunk and size + record_size > 60000:
+        if chunk and size + record_size > limit:
             batches.append(chunk)
             chunk, size = [], 0
         chunk.append(record)
         size += record_size
     if chunk:
         batches.append(chunk)
+    return batches
+
+
+def spool(state, root, baseline=False):
+    adapter = gtd_sources.history_adapter(state.config())
+    collected = adapter.collect(state, root, baseline)
+    records, cursors = collected["records"], collected["cursors"]
+    batches = chunk_records(records)
     # The durable payload and cursor advance share a transaction; rolling source files may disappear.
     with state.db:
         for batch in batches:
@@ -625,6 +635,42 @@ def capture(state, title, bucket="inbox", project=""):
     return {"ok": True, "candidate_key": key}
 
 
+def backfill(state, days, git_roots=None, force=False):
+    """Queue the last `days` of local Codex/Claude sessions and git commits, then extract them.
+
+    For a first run without Computer History: the same extractor, clarification
+    and confirm-before-write path as live collection. Runs once per state unless
+    `force`; an interrupted run resumes with `process`.
+    """
+    if days <= 0:
+        raise ValueError("--days must be positive")
+    marker = state.base / "backfill.json"
+    if marker.exists() and not force:
+        raise ValueError("Backfill already ran (" + marker.read_text().strip() + "); use --force to repeat")
+    end = dt.datetime.now(dt.timezone.utc)
+    start = end - dt.timedelta(days=days)
+    roots = [Path(root).expanduser() for root in git_roots] if git_roots else None
+    events = gtd_local.window(start, end, roots)
+    batches = chunk_records(events)
+    with state.lock(), state.db:
+        for batch in batches:
+            state.db.execute("INSERT INTO batches VALUES(?,?,?,?,?,?)",
+                             (uuid.uuid4().hex, now(), "pending", encode(batch), "", ""))
+    atomic_json(marker, {"at": now(), "since": start.isoformat(), "until": end.isoformat(),
+                         "events": len(events), "batches": len(batches)})
+    kinds = {}
+    for event in events:
+        kinds[event["source_type"]] = kinds.get(event["source_type"], 0) + 1
+    value = {"ok": True, "events": len(events), "by_source": kinds, "batches": len(batches)}
+    try:
+        value.update(process(state, notifications=False))
+    except Exception as error:
+        pending = state.db.execute("SELECT COUNT(*) FROM batches WHERE state='pending'").fetchone()[0]
+        value.update({"ok": False, "error": str(error), "pending_batches": pending,
+                      "resume": "gtd.py process"})
+    return value
+
+
 def history_window(state, root, since, until):
     def parsed(value):
         result = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -795,6 +841,10 @@ def main():
     history.add_argument("--root")
     history.add_argument("--since", required=True)
     history.add_argument("--until", required=True)
+    back = sub.add_parser("backfill")
+    back.add_argument("--days", type=float, default=3)
+    back.add_argument("--git-root", action="append", default=[])
+    back.add_argument("--force", action="store_true")
     quick = sub.add_parser("capture")
     quick.add_argument("title")
     quick.add_argument("--bucket", choices=sorted(BUCKETS), default="inbox")
@@ -831,6 +881,8 @@ def main():
             value = spool(state, args.root or state.config().get("history_root", ""), args.baseline)
     elif args.command == "history":
         value = history_window(state, args.root or state.config().get("history_root", ""), args.since, args.until)
+    elif args.command == "backfill":
+        value = backfill(state, args.days, args.git_root, args.force)
     elif args.command == "capture":
         value = capture(state, args.title, args.bucket, args.project)
     elif args.command == "configure":

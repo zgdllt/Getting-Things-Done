@@ -176,7 +176,7 @@ def git_events(start: dt.datetime, end: dt.datetime, roots: Iterable[Path] = DEF
 
 def window(start: dt.datetime, end: dt.datetime, git_roots: Optional[Iterable[Path]] = None,
            sources: Iterable[str] = ("codex", "claude", "git")) -> List[Dict[str, Any]]:
-    """All local events in [start, end), oldest first, capped at MAX_EVENTS."""
+    """All local events in [start, end), oldest first; past MAX_EVENTS only the newest are kept."""
     wanted = set(sources)
     events: List[Dict[str, Any]] = []
     if "codex" in wanted:
@@ -186,7 +186,7 @@ def window(start: dt.datetime, end: dt.datetime, git_roots: Optional[Iterable[Pa
     if "git" in wanted:
         events += git_events(start, end, git_roots or DEFAULT_GIT_ROOTS)
     events.sort(key=lambda e: _ts(e["timestamp"]) or start)
-    return events[:MAX_EVENTS]
+    return events[-MAX_EVENTS:]
 
 
 if __name__ == "__main__":

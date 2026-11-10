@@ -3,6 +3,8 @@
 Credentials live in a private JSON file outside any repository, e.g.
 ~/.codex/personal-gtd/secrets/<name>.json  (mode 0600):
     {"base_url": "https://host/v1", "api_key": "...", "model": "..."}
+Optional "extra_body" is merged into every request, for server-specific settings such as
+{"max_tokens": 8000, "chat_template_kwargs": {"enable_thinking": false}} on local reasoning models.
 The key is never logged; errors include only status codes and a short body.
 """
 from __future__ import annotations
@@ -40,6 +42,10 @@ def chat_json(provider: Dict[str, str], system: str, user: str, timeout: float =
     body = {"model": provider["model"], "temperature": temperature,
             "response_format": {"type": "json_object"},
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+    extra = provider.get("extra_body") or {}
+    if not isinstance(extra, dict) or {"model", "messages"} & set(extra):
+        raise ProviderError("extra_body must be an object and cannot replace model or messages")
+    body.update(extra)
     request = urllib.request.Request(provider["base_url"].rstrip("/") + "/chat/completions",
                                      data=json.dumps(body).encode(), method="POST",
                                      headers={"Authorization": "Bearer " + provider["api_key"],
