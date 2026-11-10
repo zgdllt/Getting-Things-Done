@@ -9,7 +9,7 @@ import sys
 import uuid
 
 import gtd
-import gtd_models
+import gtd_providers
 
 
 def enqueue(state, question_keys, candidate_keys=None, force=False):
@@ -184,7 +184,7 @@ def process(state):
             job = state.db.execute("SELECT * FROM answer_jobs WHERE state='pending' ORDER BY created_at,rowid LIMIT 1").fetchone()
             if not job:
                 break
-            choice = gtd_models.selection(state)
+            choice = gtd_providers.label(state)
             with state.db:
                 state.db.execute("UPDATE answer_jobs SET state='processing',model=?,reasoning_effort=?,updated_at=? WHERE id=?",
                                  (choice["model"], choice["reasoning_effort"], gtd.now(), job["id"]))

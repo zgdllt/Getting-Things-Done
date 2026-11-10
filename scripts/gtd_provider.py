@@ -74,6 +74,24 @@ def chat_json(provider: Dict[str, str], system: str, user: str, timeout: float =
     raise ProviderError(last or "provider failed")
 
 
+def list_models(base_url: str, api_key: str, timeout: float = 15) -> List[str]:
+    """Model IDs from the endpoint's GET /models (OpenAI format); errors carry no key."""
+    request = urllib.request.Request(base_url.rstrip("/") + "/models", method="GET",
+                                     headers={"Authorization": "Bearer " + api_key, "User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        with error:
+            raise ProviderError(f"HTTP {error.code}: {error.read()[:200]!r}") from None
+    except (urllib.error.URLError, OSError, ValueError) as error:
+        raise ProviderError(f"{type(error).__name__}: {str(error)[:200]}") from None
+    entries = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        raise ProviderError("该地址没有返回模型目录（GET /models）")
+    return sorted({entry["id"] for entry in entries if isinstance(entry, dict) and isinstance(entry.get("id"), str)})
+
+
 def schema_instruction(schema: Dict[str, Any]) -> str:
     return "Return only one JSON object that conforms to this JSON Schema:\n" + json.dumps(schema, ensure_ascii=False)
 

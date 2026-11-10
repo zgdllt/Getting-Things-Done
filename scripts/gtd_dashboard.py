@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 import gtd
 import gtd_clarify
 import gtd_models
+import gtd_providers
 import gtd_options
 import gtd_sources
 import gtd_files
@@ -88,7 +89,7 @@ def dashboard_state(state):
     for candidate in candidates:
         candidate["resolution"] = resolutions.get(candidate["key"])
     return {"ok": True, "at": gtd.now(), "timezone": gtd_sources.timezone_name(config),
-            "model_settings": gtd_models.selection(state), "answer_jobs": jobs,
+            "model_settings": gtd_models.selection(state), "active_model": gtd_providers.label(state), "answer_jobs": jobs,
             "preferences": {"task_display": config.get("workbench_preferences", {}).get("task_display", "cards")},
             "source_status": gtd_sources.status(config),
             "snapshot": native,
@@ -206,6 +207,16 @@ def action(state, route, data):
         return gtd_clarify.retry(state, job_id=nonempty(data, "job_id")) if data.get("job_id") else gtd_clarify.retry(state, nonempty(data, "candidate_key"))
     if route == "/api/model":
         return gtd_models.save(state, data.get("model"), data.get("reasoning_effort"), gtd.atomic_json)
+    if route == "/api/providers/save":
+        return gtd_providers.save(state, data)
+    if route == "/api/providers/use":
+        return gtd_providers.use(state, data)
+    if route == "/api/providers/delete":
+        return gtd_providers.delete(state, data)
+    if route == "/api/providers/test":
+        return gtd_providers.check(state, data)
+    if route == "/api/providers/models":
+        return gtd_providers.models(state, data)
     if route == "/api/preferences":
         style = data.get("task_display")
         if style not in ("cards", "list"):
@@ -332,6 +343,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/deck.js": ("deck.js", "text/javascript; charset=utf-8"),
                   "/files.js": ("files.js", "text/javascript; charset=utf-8"),
                   "/files.css": ("files.css", "text/css; charset=utf-8"),
+                  "/providers.js": ("providers.js", "text/javascript; charset=utf-8"),
                   "/style.css": ("style.css", "text/css; charset=utf-8"),
                   "/icon.svg": ("icon.svg", "image/svg+xml")}
         if route in assets:
@@ -339,12 +351,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (WEB / path).read_bytes(), kind)
         if not self.authenticated():
             return self.send(401, {"error": "请从桌面「Getting Things Done」入口打开工作台"})
-        if route not in ("/api/state", "/api/models", "/api/files"):
+        if route not in ("/api/state", "/api/models", "/api/files", "/api/providers"):
             return self.send(404, {"error": "页面不存在"})
         state = gtd.State(self.server.base)
         try:
             query = {key: values[-1] for key, values in parse_qs(urlsplit(self.path).query).items()}
             self.send(200, gtd_models.catalog(state) if route == "/api/models"
+                      else gtd_providers.listing(state) if route == "/api/providers"
                       else gtd_files.snapshot(state, query) if route == "/api/files" else dashboard_state(state))
         except ValueError as error:
             self.send(400, {"error": str(error)})
