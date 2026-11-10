@@ -3,6 +3,7 @@ import datetime as dt
 import io
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 import urllib.error
@@ -269,6 +270,81 @@ class BackfillTest(unittest.TestCase):
              patch.object(gtd_local, "git_events", return_value=[]):
             kept = gtd_local.window(T0, T0 + dt.timedelta(hours=1))
         self.assertEqual([event["event_key"] for event in kept], ["k3", "k4"])
+
+
+class LocalLiveSourceTest(unittest.TestCase):
+    """The local adapter feeds the daemon through spool without Computer History."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.state = gtd.State(Path(self.temp.name) / "state")
+        gtd.atomic_json(self.state.base / "config.json", {"history_source": "local_history", "memory_source_enabled": False})
+        self.now = dt.datetime.now(dt.timezone.utc)
+
+    def tearDown(self):
+        self.state.db.close()
+        self.temp.cleanup()
+
+    def event(self, key, minutes_ago):
+        stamp = (self.now - dt.timedelta(minutes=minutes_ago)).isoformat()
+        return gtd_local._record(key, stamp, "agent.user_message", "local_codex_session", "Codex", "p", "做 " + key)
+
+    def spool(self, events, baseline=False):
+        with patch.object(gtd_local, "window", return_value=events) as window:
+            result = gtd.spool(self.state, "", baseline=baseline)
+        return result, window
+
+    def queued_keys(self):
+        return [e["event_key"] for row in self.state.rows("SELECT payload FROM batches") for e in json.loads(row["payload"])]
+
+    def test_registry_returns_local_adapter(self):
+        adapter = gtd_sources.history_adapter({"history_source": "local_history", "local_sources": ["git", "bogus"]})
+        self.assertIsInstance(adapter, gtd_local.LocalHistoryAdapter)
+        self.assertEqual(adapter.sources, ["git"])
+
+    def test_overlapping_polls_queue_each_event_once(self):
+        first, window = self.spool([self.event("a", 5), self.event("b", 2)])
+        self.assertEqual((first["records"], first["source_adapter"]), (2, "local_history"))
+        start, end = window.call_args.args[:2]
+        self.assertAlmostEqual((end - start).total_seconds(), (gtd_local.FIRST_LOOKBACK + gtd_local.OVERLAP).total_seconds(), delta=5)
+        second, window = self.spool([self.event("a", 5), self.event("b", 2), self.event("c", 1)])
+        self.assertEqual(second["records"], 1)
+        self.assertEqual(self.queued_keys(), ["a", "b", "c"])
+        cursor = self.state.rows("SELECT offset, signature FROM cursors WHERE path=?", (gtd_local.CURSOR_PATH,))[0]
+        self.assertEqual(sorted(json.loads(cursor["signature"])), ["a", "b", "c"])
+
+    def test_baseline_skips_existing_activity(self):
+        result, _ = self.spool([self.event("old", 3)], baseline=True)
+        self.assertEqual(result["records"], 0)
+        self.assertFalse(self.state.rows("SELECT * FROM batches"))
+        later, _ = self.spool([self.event("old", 3), self.event("new", 1)])
+        self.assertEqual(self.queued_keys(), ["new"])
+
+    def test_cursor_and_batches_share_a_transaction(self):
+        with patch.object(gtd_local, "window", return_value=[self.event("x", 1)]), \
+             patch.object(gtd, "encode", side_effect=[json.dumps({"x": 1}), RuntimeError("disk full")]):
+            with self.assertRaises(RuntimeError):
+                gtd.spool(self.state, "")
+        self.assertFalse(self.state.rows("SELECT * FROM cursors"))
+        self.assertFalse(self.state.rows("SELECT * FROM batches"))
+
+    def test_install_hook_for_local_source_needs_no_root(self):
+        with patch.object(gtd_local, "window", return_value=[self.event("before", 1)]), \
+             patch.object(gtd, "native_binary", side_effect=AssertionError("CH watcher not needed")), \
+             patch.object(gtd, "bootstrap_job", return_value=subprocess.CompletedProcess([], 0, "", "")), \
+             patch.object(gtd.subprocess, "run"), patch.object(Path, "home", return_value=Path(self.temp.name)):
+            result = gtd.install_hook(self.state, source="local_history")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["baseline"]["records"], 0)
+        self.assertEqual(self.state.config()["history_source"], "local_history")
+        with self.assertRaises(ValueError):
+            gtd.install_hook(self.state, source="computer_history")
+
+    def test_status_reports_missing_sources(self):
+        empty = Path(self.temp.name) / "none"
+        with patch.object(gtd_local, "CODEX_ROOT", empty), patch.object(gtd_local, "CLAUDE_ROOT", empty):
+            status = gtd_local.LocalHistoryAdapter({"local_git_roots": [str(empty)]}).status()
+        self.assertEqual((status["state"], status["adapter"]), ("unavailable", "local_history"))
 
 
 if __name__ == "__main__":

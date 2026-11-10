@@ -240,6 +240,9 @@ ADAPTERS = {ComputerHistoryAdapter.name: ComputerHistoryAdapter}
 
 def history_adapter(config):
     name = (config or {}).get("history_source", ComputerHistoryAdapter.name)
+    if name == "local_history":
+        import gtd_local  # imported lazily: gtd_local builds on this module
+        return gtd_local.LocalHistoryAdapter(config)
     adapter = ADAPTERS.get(name)
     if not adapter:
         raise SourceUnavailable("Unknown history source adapter: " + str(name))

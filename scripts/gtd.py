@@ -245,6 +245,7 @@ def project_event(event, path, offset):
 
 
 BATCH_CHARS = 60000
+LOCAL_POLL_SECONDS = 180
 
 
 def chunk_records(records, limit=BATCH_CHARS):
@@ -693,23 +694,33 @@ def history_window(state, root, since, until):
 
 def daemon(state):
     config = state.config()
-    root = config.get("history_root")
-    if not root:
+    local = config.get("history_source") == "local_history"
+    root = config.get("history_root") or ""
+    if not root and not local:
         raise RuntimeError("Configure the Computer History root first")
     atomic_json(state.base / "hook-status.json", {"state": "starting", "at": now(), "pid": os.getpid()})
-    watcher = subprocess.Popen([str(native_binary(state)), "watch", root], stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE, text=True, bufsize=1)
+    # Computer History is watched with FSEvents; the local source (sessions + git) is polled.
+    watcher = None if local else subprocess.Popen([str(native_binary(state)), "watch", root], stdout=subprocess.PIPE,
+                                                  stderr=subprocess.PIPE, text=True, bufsize=1)
     selector = selectors.DefaultSelector()
-    selector.register(watcher.stdout, selectors.EVENT_READ)
+    if watcher:
+        selector.register(watcher.stdout, selectors.EVENT_READ)
+    poll_seconds = max(30, int(config.get("local_poll_seconds", LOCAL_POLL_SECONDS)))
+    next_poll = 0.0
     dirty, last_run = True, 0.0
     retry_at, failures, needs_attention = None, 0, False
     retry_delays = [30, 120, 600]
     try:
-        while watcher.poll() is None:
-            for key, _ in selector.select(timeout=1):
-                line = key.fileobj.readline()
-                if line:
-                    dirty = True
+        while watcher is None or watcher.poll() is None:
+            if watcher:
+                for key, _ in selector.select(timeout=1):
+                    line = key.fileobj.readline()
+                    if line:
+                        dirty = True
+            else:
+                time.sleep(1)
+                if time.monotonic() >= next_poll:
+                    dirty, next_poll = True, time.monotonic() + poll_seconds
             due_retry = retry_at is not None and time.monotonic() >= retry_at
             due_change = dirty and retry_at is None and time.monotonic() - last_run >= config.get("coalesce_seconds", 60)
             if due_retry or due_change:
@@ -769,11 +780,12 @@ def daemon(state):
         raise RuntimeError("Filesystem watcher exited: " + watcher.stderr.read()[-1500:])
     finally:
         selector.close()
-        watcher.terminate()
-        try:
-            watcher.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            watcher.kill()
+        if watcher:
+            watcher.terminate()
+            try:
+                watcher.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                watcher.kill()
 
 
 def bootstrap_job(target, plist):
@@ -787,19 +799,32 @@ def bootstrap_job(target, plist):
     return result
 
 
-def install_hook(state, root):
-    root = str(Path(root).expanduser().resolve())
-    native_binary(state)
+def install_hook(state, root=None, source=None):
+    """Install the background job. Computer History needs its root; the local source needs none."""
+    with state.lock():
+        current = state.config()
+    source = source or current.get("history_source") or "computer_history"
+    if source not in ("computer_history", "local_history"):
+        raise ValueError("Unknown history source: " + str(source))
+    if source == "computer_history":
+        if not root:
+            raise ValueError("Computer History needs --root")
+        root = str(Path(root).expanduser().resolve())
+        native_binary(state)
+    else:
+        root = current.get("history_root") or ""
     with state.lock():
         config = state.config()
-        first_enable = config.get("history_root") != root
+        first_enable = config.get("history_root") != root or config.get("history_source", "computer_history") != source
+        config["history_source"] = source
+        atomic_json(state.base / "config.json", config)
         baseline = spool(state, root, baseline=first_enable)
         legacy_timezone = config.get("timezone") == "Asia/Shanghai" and "timezone_source" not in config
         timezone_source = config.get("timezone_source")
         if timezone_source is None:
             timezone_source = "system" if legacy_timezone or not config.get("timezone") else "user"
         config.update({"history_root": root,
-                       "history_source": config.get("history_source", "computer_history"),
+                       "history_source": source,
                        "coalesce_seconds": config.get("coalesce_seconds", 60),
                        "timezone": gtd_sources.local_timezone_name() if legacy_timezone or not config.get("timezone")
                        else config["timezone"],
@@ -852,7 +877,9 @@ def main():
     configure = sub.add_parser("configure")
     configure.add_argument("--ca-certificate", required=True)
     start = sub.add_parser("hook-start")
-    start.add_argument("--root", required=True)
+    start.add_argument("--root", help="Computer History root (only for --source computer_history)")
+    start.add_argument("--source", choices=("local_history", "computer_history"),
+                       help="local_history: Codex/Claude sessions and git commits; default keeps the current source")
     apply = sub.add_parser("apply")
     apply.add_argument("--plan", required=True)
     answer = sub.add_parser("answer")
@@ -922,7 +949,7 @@ def main():
                  "questions": state.rows("SELECT key,candidate_key,question FROM questions WHERE state='open'"),
                  "pending_batches": state.db.execute("SELECT COUNT(*) FROM batches WHERE state='pending'").fetchone()[0]}
     elif args.command == "hook-start":
-        value = install_hook(state, args.root)
+        value = install_hook(state, args.root, args.source)
     elif args.command == "hook-stop":
         result = subprocess.run(["/bin/launchctl", "bootout", "gui/"+str(os.getuid())+"/"+LABEL], capture_output=True)
         atomic_json(state.base/"hook-status.json", {"state": "stopped", "at": now()})

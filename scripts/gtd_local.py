@@ -189,6 +189,76 @@ def window(start: dt.datetime, end: dt.datetime, git_roots: Optional[Iterable[Pa
     return events[-MAX_EVENTS:]
 
 
+CURSOR_PATH = "local_history"
+OVERLAP = dt.timedelta(minutes=15)      # re-read window for log lines written slightly late
+FIRST_LOOKBACK = dt.timedelta(minutes=10)
+STALE_HOURS = 36
+
+
+def configured_sources(config: Dict[str, Any]) -> Tuple[List[str], List[Path]]:
+    sources = (config or {}).get("local_sources") or ["codex", "claude", "git"]
+    roots = [Path(root).expanduser() for root in (config or {}).get("local_git_roots") or []] or DEFAULT_GIT_ROOTS
+    return [s for s in sources if s in ("codex", "claude", "git")], roots
+
+
+class LocalHistoryAdapter(gtd_sources.HistoryAdapter):
+    """Live clue source from Codex/Claude sessions and git commits, without Computer History.
+
+    The cursor (end of the last read window plus event keys seen inside the overlap) is
+    returned to `spool`, which stores it in the same transaction as the queued batches.
+    """
+
+    name = "local_history"
+    schema = "codex sessions + claude projects + git log"
+
+    def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        self.sources, self.git_roots = configured_sources(config or {})
+
+    def collect(self, state: Any, root: str = "", baseline: bool = False,
+                now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        end = now or dt.datetime.now(dt.timezone.utc)
+        saved = state.db.execute("SELECT offset, signature FROM cursors WHERE path=?", (CURSOR_PATH,)).fetchone()
+        if saved:
+            last_end = dt.datetime.fromtimestamp(saved["offset"], dt.timezone.utc)
+            recent = set(json.loads(saved["signature"] or "[]"))
+        else:
+            last_end, recent = end - FIRST_LOOKBACK, set()
+        found = window(min(last_end - OVERLAP, end), end, self.git_roots, self.sources)
+        # A baseline only records where reading starts; earlier activity is left to `backfill`.
+        records = [] if baseline else [event for event in found if event["event_key"] not in recent]
+        keep_from = end - OVERLAP
+        recent = {event["event_key"] for event in found if (_ts(event["timestamp"]) or end) >= keep_from}
+        cursor = (CURSOR_PATH, 0, int(end.timestamp()), json.dumps(sorted(recent)))
+        times = [event["timestamp"] for event in records]
+        return {"records": records, "cursors": [cursor], "malformed_lines": 0,
+                "first_event_at": min(times) if times else None,
+                "latest_event_at": max(times) if times else None}
+
+    def window(self, root: str, start: dt.datetime, end: dt.datetime) -> Tuple[List[Dict[str, Any]], List[dt.datetime]]:
+        events = window(start, end, self.git_roots, self.sources)
+        return events, [t for t in (_ts(event["timestamp"]) for event in events) if t]
+
+    def status(self, root: str = "") -> Dict[str, Any]:
+        dirs = {"codex": CODEX_ROOT, "claude": CLAUDE_ROOT}
+        present = [name for name in self.sources if name in dirs and dirs[name].is_dir()]
+        repos = git_repos(self.git_roots) if "git" in self.sources else []
+        latest = None
+        for name in present:
+            for path in glob.glob(str(dirs[name] / "**/*.jsonl"), recursive=True):
+                try:
+                    latest = max(latest or 0.0, Path(path).stat().st_mtime)
+                except OSError:
+                    continue
+        base = {"adapter": self.name, "root": None, "schema": self.schema, "sources": present,
+                "git_repositories": len(repos), "segments": len(present)}
+        if not present and not repos:
+            return {**base, "state": "unavailable", "error": "没有找到 Codex / Claude 会话记录或 git 仓库"}
+        age = (dt.datetime.now(dt.timezone.utc).timestamp() - latest) / 3600 if latest else None
+        return {**base, "state": "stale" if age is not None and age > STALE_HOURS else "ready",
+                "latest_at": dt.datetime.fromtimestamp(latest, dt.timezone.utc).isoformat() if latest else None,
+                "age_hours": round(age, 1) if age is not None else None, "warning_after_hours": STALE_HOURS}
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Count local activity events (no content printed)")
