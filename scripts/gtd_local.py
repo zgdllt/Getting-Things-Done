@@ -177,8 +177,9 @@ def git_events(start: dt.datetime, end: dt.datetime, roots: Iterable[Path] = DEF
 
 
 def window(start: dt.datetime, end: dt.datetime, git_roots: Optional[Iterable[Path]] = None,
-           sources: Iterable[str] = ("codex", "claude", "git")) -> List[Dict[str, Any]]:
-    """All local events in [start, end), oldest first; past MAX_EVENTS only the newest are kept."""
+           sources: Iterable[str] = ("codex", "claude", "git"),
+           agent_replies: bool = True) -> List[Dict[str, Any]]:
+    """Read [start, end), optionally dropping agent replies before capping newest events."""
     wanted = set(sources)
     events: List[Dict[str, Any]] = []
     if "codex" in wanted:
@@ -187,6 +188,8 @@ def window(start: dt.datetime, end: dt.datetime, git_roots: Optional[Iterable[Pa
         events += claude_events(start, end)
     if "git" in wanted:
         events += git_events(start, end, git_roots or DEFAULT_GIT_ROOTS)
+    if not agent_replies:
+        events = [event for event in events if event["kind"] != "agent.final_answer"]
     events.sort(key=lambda e: _ts(e["timestamp"]) or start)
     return events[-MAX_EVENTS:]
 
@@ -214,10 +217,13 @@ class LocalHistoryAdapter(gtd_sources.HistoryAdapter):
     schema = "codex sessions + claude projects + git log"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None) -> None:
+        """Configure sources and opt in to assistant-reply intake only explicitly."""
         self.sources, self.git_roots = configured_sources(config or {})
+        self.agent_replies = bool((config or {}).get("local_include_agent_replies", False))
 
     def collect(self, state: Any, root: str = "", baseline: bool = False,
                 now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+        """Collect the configured intake window and a transaction-ready overlap cursor."""
         end = now or dt.datetime.now(dt.timezone.utc)
         saved = state.db.execute("SELECT offset, signature FROM cursors WHERE path=?", (CURSOR_PATH,)).fetchone()
         if saved:
@@ -225,7 +231,8 @@ class LocalHistoryAdapter(gtd_sources.HistoryAdapter):
             recent = set(json.loads(saved["signature"] or "[]"))
         else:
             last_end, recent = end - FIRST_LOOKBACK, set()
-        found = window(min(last_end - OVERLAP, end), end, self.git_roots, self.sources)
+        found = window(min(last_end - OVERLAP, end), end, self.git_roots, self.sources,
+                       agent_replies=self.agent_replies)
         # A baseline only records where reading starts; earlier activity is left to `backfill`.
         records = [] if baseline else [event for event in found if event["event_key"] not in recent]
         keep_from = end - OVERLAP
@@ -237,7 +244,8 @@ class LocalHistoryAdapter(gtd_sources.HistoryAdapter):
                 "latest_event_at": max(times) if times else None}
 
     def window(self, root: str, start: dt.datetime, end: dt.datetime) -> Tuple[List[Dict[str, Any]], List[dt.datetime]]:
-        events = window(start, end, self.git_roots, self.sources)
+        """Read a bounded local intake window with the same reply policy as live collection."""
+        events = window(start, end, self.git_roots, self.sources, agent_replies=self.agent_replies)
         return events, [t for t in (_ts(event["timestamp"]) for event in events) if t]
 
     def status(self, root: str = "") -> Dict[str, Any]:

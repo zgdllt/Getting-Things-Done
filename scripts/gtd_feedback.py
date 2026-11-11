@@ -8,6 +8,7 @@ from typing import Any
 
 import gtd
 import gtd_board as board
+import gtd_board_merge
 import gtd_memory
 import gtd_threads
 
@@ -26,7 +27,8 @@ def set_status(state: gtd.State, item: board.BoardItem, value: str,
         raise ValueError("tool and blocked statuses apply only to projects")
     if value == "not_important":
         adjust_weight(prefs, item["project"], -0.2)
-        prefs["hidden"][identity] = (now + dt.timedelta(days=30)).isoformat()
+        for alias in [identity, *item.get("merged_ids", [])]:
+            prefs["hidden"][alias] = (now + dt.timedelta(days=30)).isoformat()
         return
     if item["kind"] == "project":
         entries = gtd_memory.projects(state)
@@ -41,6 +43,8 @@ def set_status(state: gtd.State, item: board.BoardItem, value: str,
     else:
         entry = {}
     if value in ("done", "tool"):
+        for alias in item.get("merged_ids", []):
+            prefs["hidden"][alias] = None
         if item["kind"] != "project":
             prefs["hidden"][identity] = None
         prefs["statuses"].pop(identity, None)
@@ -70,13 +74,14 @@ def record_feedback(state: gtd.State, item_id: str, action: str, value: Any = No
         raise ValueError("unknown feedback action")
     previous = board.read_json(state.base / "board.json")
     current = board.build(state, now, refresh_activity=False)
-    item = next((item for item in current["items"] if item["id"] == item_id), None)
+    item = gtd_board_merge.find(current["items"], item_id)
     if item is None and action == "notification":
         notified = board.read_json(state.base / "memory/notified.json")
-        item = notified.get("cards", {}).get(item_id) or next(
-            (item for item in previous.get("items", []) if item["id"] == item_id), None)
+        item = gtd_board_merge.find(list(notified.get("cards", {}).values()), item_id) or gtd_board_merge.find(
+            previous.get("items", []), item_id)
     if item is None:
         raise ValueError(f"unknown or hidden board item: {item_id}")
+    item_id = item["id"]
     prefs = board.preferences(state)
     if action == "move":
         old_important, new_important = item["quadrant"] in (1, 2), value in (1, 2)

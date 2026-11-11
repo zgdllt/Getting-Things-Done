@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -62,12 +63,13 @@ class BoardFixture(unittest.TestCase):
         self.write("config.json", config)
 
     def candidate(self, key: str = "task", project: str | None = "Alpha", due: str | None = None,
-                  status: str = "inbox", target: str = "") -> str:
+                  status: str = "inbox", target: str = "", title: str | None = None,
+                  evidence: list[dict] | None = None, updated: dt.datetime = NOW) -> str:
         """Insert a local candidate with a controlled workflow state and explicit due date."""
         with self.state.db:
             self.state.db.execute("INSERT INTO candidates VALUES (?,?,?,?,?,?,?,?,?,?)",
-                                  (key, "任务 " + key, "next", project, due, "[]", status, target,
-                                   NOW.isoformat(), NOW.isoformat()))
+                                  (key, title or "任务 " + key, "next", project, due, json.dumps(evidence or []),
+                                   status, target, NOW.isoformat(), updated.isoformat()))
         return "candidate:" + key
 
     def build(self, now: dt.datetime = NOW, refresh: bool = False) -> dict:

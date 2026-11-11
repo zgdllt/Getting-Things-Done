@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 import gtd
+import gtd_board_merge
 import gtd_local
 import gtd_memory
 import gtd_threads
@@ -36,6 +37,9 @@ class BoardItem(TypedDict):
     left_off: str | None
     remaining: str | None
     updated_at: str
+    activity_at: float
+    parent: str | None
+    merged_ids: list[str]
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -119,8 +123,25 @@ def project_data(scanned: dict[str, Any], memory: dict[str, Any],
     return result
 
 
+def own_activity(context: dict[str, Any], now: dt.datetime, days: int) -> bool:
+    """Use only the scan's last own message/commit, never its assistant replies."""
+    last = timestamp(context.get("activity", {}).get("last"))
+    return bool(last and dt.timedelta(0) <= now - last <= dt.timedelta(days=days))
+
+
+def recent_update(value: Any, now: dt.datetime) -> bool:
+    """Check the inclusive elapsed seven-day candidate update window."""
+    stamp = timestamp(value)
+    return bool(stamp and dt.timedelta(0) <= now - stamp <= dt.timedelta(days=7))
+
+
+def recency(*values: Any) -> float:
+    """Order source activity/updates by actual instants, with missing values last."""
+    return max((stamp.timestamp() for value in values if (stamp := timestamp(value))), default=0.0)
+
+
 def importance(item: BoardItem, context: dict[str, Any], declared: dict[str, Any],
-               decisions: dict[str, Any], prefs: dict[str, Any]) -> tuple[float, list[str]]:
+               decisions: dict[str, Any], prefs: dict[str, Any], now: dt.datetime) -> tuple[float, list[str]]:
     """Explain transparent project signals plus a bounded learned project weight."""
     score, reasons = 0.0, []
     if item["kind"] in ("reminder", "event"):
@@ -128,6 +149,12 @@ def importance(item: BoardItem, context: dict[str, Any], declared: dict[str, Any
         reasons.append("正式提醒事项" if item["kind"] == "reminder" else "日历安排")
     project = item["project"]
     if project:
+        if own_activity(context, now, 7):
+            score += 0.5
+            reasons.append("近 7 天你在做")
+        elif own_activity(context, now, 14):
+            score += 0.35
+            reasons.append("近 8–14 天你在做")
         if gtd_threads.match(project, declared):
             score += 0.4
             reasons.append("你声明的重点项目")
@@ -183,7 +210,8 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
     items: list[BoardItem] = []
 
     def add(identity: str, kind: Any, title: str, project: str | None, status: Any,
-            due: Any = None, source: Any = None, context: dict[str, Any] | None = None) -> None:
+            due: Any = None, source: Any = None, context: dict[str, Any] | None = None,
+            updated: Any = None) -> None:
         """Score one source card, apply local feedback, and expire changed pins."""
         project = gtd_threads.norm(project or "") or None
         context = context or contexts.get(project, {})
@@ -201,19 +229,18 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
                            "quadrant": 4, "pinned": False,
                            "left_off": entry.get("left_off") or inference.get("left_off") or entry.get("note"),
                            "remaining": entry.get("remaining") or entry.get("next_step") or inference.get("remaining"),
-                           "updated_at": now.isoformat()}
-        item["importance"], item["importance_reasons"] = importance(item, context, declared, decisions, prefs)
+                           "updated_at": now.isoformat(), "activity_at": recency(updated),
+                           "parent": None, "merged_ids": []}
+        item["importance"], item["importance_reasons"] = importance(item, context, declared, decisions, prefs, now)
         item["urgency"], item["urgency_reasons"] = urgency(due, item["due_source"], now)
-        item["quadrant"] = (1 if item["urgency"] >= 0.7 else 2) if item["importance"] >= 0.5 else (
-            3 if item["urgency"] >= 0.7 else 4)
+        item["quadrant"] = gtd_board_merge.quadrant(item)
         pin = prefs["pins"].get(identity)
         if pin and pin["fingerprint"] != fingerprint(item):
             del prefs["pins"][identity]
             pin = None
         if pin:
             item["quadrant"], item["pinned"] = pin["quadrant"], True
-        if not suppressed(prefs, identity, now):
-            items.append(item)
+        items.append(item)
 
     for key, context in sorted(contexts.items()):
         if "activity" not in context and "memory" not in context:
@@ -230,8 +257,13 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
             due = entry.get("next_at")
             if entry.get("next_step"):
                 title += "：" + entry["next_step"]
-        add("project:" + key, "project", title, key, status, due, "plan", context)
+        add("project:" + key, "project", title, key, status, due, "plan", context,
+            max((context.get("activity", {}).get("last") or "", entry.get("updated_at") or ""),
+                key=lambda value: recency(value)))
 
+    projects = {item["project"]: item for item in items if item["kind"] == "project"
+                and not suppressed(prefs, item["id"], now)}
+    unsorted: list[dict[str, Any]] = []
     snapshot = read_json(state.base / "last-snapshot.json")
     reminder_ids = {row["id"] for row in snapshot.get("reminders", [])}
     candidates = state.rows("SELECT * FROM candidates WHERE state IN ('inbox', 'accepted') ORDER BY key")
@@ -239,24 +271,50 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
     for row in candidates:
         if row["target_id"] and row["target_id"] in reminder_ids:
             continue
+        context = contexts.get(gtd_threads.norm(row["project"] or ""), {})
+        evidence = json.loads(row["evidence"] or "[]")
+        eligible = (valid_due(row["suggested_due"]) or row["state"] == "accepted" or (
+            gtd_threads.norm(row["project"] or "") in projects and own_activity(context, now, 7)
+            and recent_update(row["updated_at"], now)))
+        if not eligible or (evidence and all(event.get("kind") == "agent.final_answer" for event in evidence)):
+            if row["state"] == "inbox" and not suppressed(prefs, "candidate:" + row["key"], now):
+                unsorted.append({**row, "id": "candidate:" + row["key"], "evidence": evidence})
+            continue
         add("candidate:" + row["key"], "task", row["title"], row["project"], "todo",
-            row["suggested_due"], "candidate")
+            row["suggested_due"], "candidate", updated=row["updated_at"])
     for row in snapshot.get("reminders", []):
         raw_due = row.get("due")
         due = valid_due(raw_due.get("value") if isinstance(raw_due, dict) else raw_due)
         if not row.get("completed") and due:
             status = "doing" if timestamp(due).date() == now.date() else "todo"
             project = row.get("project") or reminder_projects.get(row["id"])
-            add("reminder:" + row["id"], "reminder", row["title"], project, status, due, "reminder")
+            add("reminder:" + row["id"], "reminder", row["title"], project, status, due, "reminder",
+                updated=row.get("modified_at") or row.get("updated_at") or row.get("created_at"))
     for row in snapshot.get("events", []):
         start = timestamp(row.get("start"))
         if start and now <= start <= now + dt.timedelta(days=3):
             due = valid_due(row["start"])
-            add(f"event:{row['id']}:{due}", "event", row["title"], row.get("project"), "todo", due, "calendar")
+            add(f"event:{row['id']}:{due}", "event", row["title"], row.get("project"), "todo", due, "calendar",
+                updated=row.get("modified_at") or row.get("updated_at") or row.get("created_at"))
     if prefs["pins"] != original_pins or prefs != preferences(state):
         gtd.atomic_json(state.base / "memory/preferences.json", prefs)
-    board = {"generated_at": now.isoformat(), "items": items,
-             "counts": {quadrant: sum(item["quadrant"] == quadrant for item in items) for quadrant in range(1, 5)}}
+    for item in items:
+        if item["kind"] != "project" and item["project"] in projects:
+            item["parent"] = projects[item["project"]]["id"]
+    items = [item for item in items if not suppressed(prefs, item["id"], now)]
+    merged = gtd_board_merge.merge(items, contexts)
+    merged_count = len(items) - len(merged)
+    items = merged
+    visible = {item["id"] for item in items}
+    for item in items:
+        if item["parent"] not in visible:
+            item["parent"] = None
+    items.sort(key=lambda item: (item["quadrant"], -item["urgency"], -item["importance"],
+                                 -item["activity_at"], item["id"]))
+    unsorted.sort(key=lambda row: (-recency(row["updated_at"]), row["id"]))
+    counts = {quadrant: sum(item["quadrant"] == quadrant for item in items) for quadrant in range(1, 5)}
+    board = {"generated_at": now.isoformat(), "items": items, "counts": counts, "quadrant_counts": counts,
+             "unsorted": {"count": len(unsorted), "items": unsorted[:50]}, "merged": merged_count}
     gtd.atomic_json(state.base / "board.json", board)
     return board
 

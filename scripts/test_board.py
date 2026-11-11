@@ -4,23 +4,22 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
-import os
 from pathlib import Path
 import stat
 import sys
-import time
 from contextlib import redirect_stdout
 import unittest
 from unittest.mock import patch
 
 import gtd
 import gtd_board as board
-import gtd_board_notifications as notifications
 import gtd_memory
 import gtd_threads
 import install
 
 from test_board_support import BoardFixture, NOW
+from test_board_notifications import NotificationTests
+from test_board_merge import MergeTests
 
 
 class BoardTests(BoardFixture):
@@ -32,7 +31,7 @@ class BoardTests(BoardFixture):
         self.declare("Alpha")
         for key, project, due in (("q1", "Alpha", "2026-11-12"), ("q2", "Alpha", None),
                                   ("q3", None, "2026-11-09"), ("q4", None, None)):
-            self.candidate(key, project, due)
+            self.candidate(key, project, due, status="accepted" if key == "q4" else "inbox")
         cards = self.build()
         self.assertEqual([cards[f"candidate:q{i}"]["quadrant"] for i in range(1, 5)], [1, 2, 3, 4])
         self.assertIn("明天截止", cards["candidate:q1"]["urgency_reasons"])
@@ -90,6 +89,7 @@ class BoardTests(BoardFixture):
         self.assertEqual((item["due"], item["due_source"], item["urgency"]), ("2026-11-11", "plan", 0.8))
         self.assertIn("部署真机", item["title"])
         self.assertEqual(item["urgency_reasons"], ["计划今天继续"])
+        self.assertEqual(item["quadrant"], 1)
         gtd_memory.record(self.state, "Alpha", "paused", next_at="2026-11-14", next_step="部署真机")
         self.assertEqual(self.build()[identity]["due"], "2026-11-14")
 
@@ -122,16 +122,15 @@ class BoardTests(BoardFixture):
 
     def test_importance_learning_caps(self) -> None:
         """Scale activity over the scan window and cap positive/negative candidate counts."""
-        identity = self.project()
+        identity = self.project(stage=None)
         self.scanned["Alpha"]["dates"] = [(NOW - dt.timedelta(days=i)).date().isoformat() for i in range(14)]
         self.cache()
-        self.declare("Alpha")
         for i in range(5):
             self.candidate(str(i), status="resolved")
-        self.assertAlmostEqual(self.build()[identity]["importance"], 0.95)
+        self.assertAlmostEqual(self.build()[identity]["importance"], 0.85)
         for i in range(5, 10):
             self.candidate(str(i), status="dismissed")
-        self.assertEqual(self.build()[identity]["importance"], 0.8)
+        self.assertEqual(self.build()[identity]["importance"], 0.7)
         prefs = board.preferences(self.state)
         prefs["weights"]["alpha"] = 0.5
         self.write("memory/preferences.json", prefs)
@@ -152,15 +151,84 @@ class BoardTests(BoardFixture):
         (self.state.base / "experiments/activity-cache.json").unlink()
         self.assertEqual(self.build(), {})
 
+    def test_recent_own_activity_base_and_q2(self) -> None:
+        """Use exact seven/fourteen-day own-activity boundaries and ignore fresh replies."""
+        for days, expected in ((0, 0.5), (7, 0.5), (7.001, 0.35), (14, 0.35), (14.001, 0), (-1, 0)):
+            name = "Age" + str(days)
+            identity = self.project(name, stage=None)
+            self.scanned[name]["last"] = (NOW - dt.timedelta(days=days)).isoformat()
+            self.scanned[name]["dates"] = []
+            self.cache()
+            item = self.build()[identity]
+            self.assertEqual(item["importance"], expected)
+            self.assertEqual(item["quadrant"], 2 if expected >= 0.5 else 4)
+            if expected == 0.5:
+                self.assertIn("近 7 天你在做", item["importance_reasons"])
+        self.scanned["AgentOnly"] = {"last": None, "dates": [], "replies": [[NOW.isoformat(), "已完成"]]}
+        self.cache()
+        self.assertEqual(self.build()["project:agentonly"]["importance"], 0)
+
+    def test_candidate_inclusion_gates_and_parent(self) -> None:
+        """Admit dated, accepted or recent active-project candidates; park the rest."""
+        project = self.project()
+        self.project("Older", stage=None)
+        self.scanned["Older"]["last"] = (NOW - dt.timedelta(days=8)).isoformat()
+        self.cache()
+        old = NOW - dt.timedelta(days=8)
+        dated = self.candidate("dated", None, "2026-12-01", updated=old, title="缴费")
+        accepted = self.candidate("accepted", None, status="accepted", updated=old, title="预约")
+        recent = self.candidate("recent", "AL-PHA", "invalid", title="修复连线")
+        boundary = self.candidate("boundary", "Alpha", title="补充素材", updated=NOW - dt.timedelta(days=7))
+        for key, owner, due, updated in (("stale", "Alpha", None, old), ("orphan", None, None, NOW),
+                                         ("older", "Older", None, NOW), ("bad", None, "later", NOW),
+                                         ("future", "Alpha", None, NOW + dt.timedelta(seconds=1))):
+            self.candidate(key, owner, due, updated=updated)
+        self.project("Tool", "tool")
+        self.candidate("tool", "Tool")
+        cards = self.build()
+        self.assertTrue({dated, accepted, recent, boundary}.issubset(cards))
+        self.assertEqual(cards[recent]["parent"], project)
+        self.assertIsNone(cards[dated]["parent"])
+        value = board.read_json(self.state.base / "board.json")
+        self.assertEqual(value["unsorted"]["count"], 6)
+        self.assertEqual({row["key"] for row in value["unsorted"]["items"]},
+                         {"stale", "orphan", "older", "bad", "future", "tool"})
+        self.assertEqual(sum(value["counts"].values()), len(cards))
+
+    def test_assistant_only_evidence_excludes_every_inclusion_route(self) -> None:
+        """Read evidence JSON and reject assistant-only cards even if dated or accepted."""
+        self.project()
+        agent = [{"kind": "agent.final_answer"}, {"kind": "agent.final_answer"}]
+        self.candidate("dated", None, "2026-11-11", evidence=agent)
+        self.candidate("accepted", None, status="accepted", evidence=agent)
+        self.candidate("recent", "Alpha", evidence=agent)
+        mixed = self.candidate("mixed", None, status="accepted", title="和导师约会",
+                               evidence=agent + [{"kind": "agent.user_message"}])
+        empty = self.candidate("unknown", None, status="accepted", title="查收邮件")
+        cards = self.build()
+        self.assertEqual(set(cards), {"project:alpha", mixed, empty})
+        value = board.read_json(self.state.base / "board.json")
+        self.assertEqual({row["key"] for row in value["unsorted"]["items"]}, {"dated", "recent"})
+
+    def test_unsorted_newest_fifty_outside_quadrant_counts(self) -> None:
+        """Keep the full unsorted count but expose only its newest fifty inbox entries."""
+        for i in range(65):
+            self.candidate(f"item{i:02}", None, updated=NOW - dt.timedelta(minutes=i))
+        value = board.build(self.state, NOW, False)
+        self.assertEqual(value["items"], [])
+        self.assertEqual(value["quadrant_counts"], {1: 0, 2: 0, 3: 0, 4: 0})
+        self.assertEqual(value["unsorted"]["count"], 65)
+        self.assertEqual([row["key"] for row in value["unsorted"]["items"]], [f"item{i:02}" for i in range(50)])
+
     def test_move_pin_weights_and_fingerprint_expiry(self) -> None:
         """Learn only importance-crossing moves and drop pins when source due/status changes."""
         identity = self.project()
-        self.feedback(identity, "move", 2)
-        self.assertEqual(board.preferences(self.state)["weights"]["alpha"], 0.1)
+        self.feedback(identity, "move", 4)
+        self.assertEqual(board.preferences(self.state)["weights"]["alpha"], -0.1)
         self.assertTrue(self.build()[identity]["pinned"])
-        self.feedback(identity, "move", 1)
-        self.assertEqual(board.preferences(self.state)["weights"]["alpha"], 0.1)
         self.feedback(identity, "move", 3)
+        self.assertEqual(board.preferences(self.state)["weights"]["alpha"], -0.1)
+        self.feedback(identity, "move", 2)
         self.assertEqual(board.preferences(self.state)["weights"]["alpha"], 0)
         self.scanned["Alpha"]["last"] = NOW.isoformat()
         self.cache()
@@ -203,7 +271,7 @@ class BoardTests(BoardFixture):
         self.feedback(identity, "move", 2)
         self.feedback(identity, "status", "not_important")
         self.assertEqual(gtd_memory.projects(self.state)["Alpha"]["stage"], "active")
-        self.assertAlmostEqual(board.preferences(self.state)["weights"]["alpha"], -0.1)
+        self.assertAlmostEqual(board.preferences(self.state)["weights"]["alpha"], -0.2)
         self.assertNotIn(identity, self.build(NOW + dt.timedelta(days=29)))
         self.assertTrue(self.build(NOW + dt.timedelta(days=30))[identity]["pinned"])
 
@@ -233,111 +301,16 @@ class BoardTests(BoardFixture):
         rows = [json.loads(line) for line in (self.state.base / "memory/feedback.jsonl").read_text().splitlines()]
         self.assertEqual(len(rows), 20)
         self.assertEqual(set(rows[0]), {"timestamp", "item_id", "project", "action", "value", "quadrant", "importance", "urgency"})
-        self.assertEqual(rows[0]["quadrant"], 4)
+        self.assertEqual(rows[0]["quadrant"], 2)
 
     def test_invalid_feedback_does_not_log(self) -> None:
         """Reject unsupported inputs before recording a successful feedback event."""
-        identity = self.candidate()
+        identity = self.candidate(status="accepted")
         for action, value in (("move", 5), ("move", True), ("oops", "x"), ("status", "oops"),
                               ("notification", "oops"), ("status", "tool"), ("status", "blocked")):
             with self.subTest(action=action, value=value), self.assertRaises(ValueError):
                 self.feedback(identity, action, value)
         self.assertFalse((self.state.base / "memory/feedback.jsonl").exists())
-
-    def test_q1_receipts_dedupe_and_snooze(self) -> None:
-        """Preview never consumes delivery quota; receipts and snoozes filter Q1."""
-        identity = self.candidate(due="2026-11-11")
-        self.declare("Alpha")
-        self.project(recent=True, next_step="第一行\n第二行\n第三行")
-        first = self.select()
-        self.assertEqual([row["item_id"] for row in first], [identity])
-        self.assertEqual(len(first[0]["body"].splitlines()), 2)
-        self.assertEqual(first[0]["actions"], ["开始", "已完成", "不重要", "稍后"])
-        self.assertEqual(self.select(), first)
-        self.feedback(identity, "notification", "later")
-        self.assertEqual(self.select(NOW + dt.timedelta(hours=3)), [])
-        self.assertEqual(len(self.select(NOW + dt.timedelta(hours=4))), 1)
-        board.mark_notified(self.state, [identity, identity], NOW + dt.timedelta(hours=4))
-        self.assertEqual(self.select(NOW + dt.timedelta(hours=15, minutes=59)), [])
-        self.assertEqual(len(self.select(NOW + dt.timedelta(hours=16))), 1)
-
-    def test_one_ranked_q2_nudge_per_local_day(self) -> None:
-        """Select the highest-ranked eligible Q2 once its daily receipt permits."""
-        for name in ("Alpha", "Beta"):
-            self.project(name)
-        self.declare("Alpha", "Beta")
-        at = NOW.replace(hour=9)
-        selected = self.select(at)
-        self.assertEqual(len(selected), 1)
-        self.assertIn("没动了", selected[0]["body"])
-        board.mark_notified(self.state, [selected[0]["item_id"]], at)
-        self.assertEqual(self.select(at + dt.timedelta(hours=13)), [])
-        self.assertEqual(len(self.select(at + dt.timedelta(days=1))), 1)
-
-    def test_nudge_kinds_and_filters(self) -> None:
-        """Reuse phrase for every supported rank kind, skipping Q3/Q4 and hidden cards."""
-        identity = self.project()
-        self.declare("Alpha")
-        for kind in ("planned", "decide", "quiet", "confirm"):
-            with self.subTest(kind=kind):
-                nudge = {"project": "Alpha", "kind": kind, "note": "验收", "next_step": "部署", "idle_days": 3,
-                         "stage": "active", "usual_gap_days": 1, "last_message": "继续", "open_items": []}
-                with patch.object(gtd_threads, "rank", return_value=[nudge]), patch.object(gtd_threads, "phrase", wraps=gtd_threads.phrase) as phrase:
-                    self.assertEqual(self.select()[0]["item_id"], identity)
-                    phrase.assert_called_once_with(nudge)
-        self.feedback(identity, "notification", "not_important")
-        self.assertEqual(self.select(), [])
-
-    def test_quiet_hours_defaults_custom_and_local_day(self) -> None:
-        """Apply local quiet boundaries, custom same-day windows, and daily rollover."""
-        self.project()
-        self.declare("Alpha")
-        self.write("config.json", {"project_briefs": {"a": {"title": "Alpha"}}})
-        for hour, minute, count in ((8, 59, 0), (9, 0, 1), (21, 59, 1), (22, 0, 0)):
-            self.assertEqual(len(self.select(NOW.replace(hour=hour, minute=minute))), count)
-        config = self.state.config()
-        config["quiet_hours"] = {"start": "12:00", "end": "13:00"}
-        self.write("config.json", config)
-        self.assertEqual(self.select(), [])
-        self.assertEqual(len(self.select(NOW.replace(hour=13))), 1)
-        try:
-            with patch.dict(os.environ, {"TZ": "Asia/Shanghai"}):
-                time.tzset()
-                config["quiet_hours"] = False
-                self.write("config.json", config)
-                before = dt.datetime(2026, 11, 11, 15, 59, tzinfo=dt.timezone.utc)
-                row = self.select(before)[0]
-                board.mark_notified(self.state, [row["item_id"]], before)
-                self.assertIn("2026-11-11", notifications.log_state(self.state)["nudge_days"])
-                self.assertEqual(self.select(before + dt.timedelta(minutes=2)), [])
-                self.assertEqual(len(self.select(before + dt.timedelta(hours=13))), 1)
-        finally:
-            time.tzset()
-
-    def test_receipts_reject_multiple_pending_nudges(self) -> None:
-        """Outstanding dry runs cannot acknowledge two delivered Q2 nudges on one day."""
-        for name in ("Alpha", "Beta"):
-            self.project(name)
-        self.declare("Alpha", "Beta")
-        first = self.select()[0]["item_id"]
-        self.feedback(first, "notification", "later")
-        second = self.select()[0]["item_id"]
-        with self.assertRaises(ValueError):
-            board.mark_notified(self.state, [first, second], NOW)
-        board.mark_notified(self.state, [first], NOW)
-        with self.assertRaises(ValueError):
-            board.mark_notified(self.state, [second], NOW)
-
-    def test_notification_feedback_after_event_started(self) -> None:
-        """A clicked notification remains actionable after its event leaves the board."""
-        start = NOW + dt.timedelta(minutes=5)
-        self.write("last-snapshot.json", {"events": [{"id": "e", "title": "会议", "start": start.isoformat()}]})
-        identity = self.select()[0]["item_id"]
-        board.mark_notified(self.state, [identity], NOW)
-        self.build(NOW + dt.timedelta(minutes=10))
-        self.feedback(identity, "notification", "done", NOW + dt.timedelta(minutes=10))
-        self.assertIn(identity, board.preferences(self.state)["hidden"])
-        self.assertEqual(len(board.read_json(self.state.base / "last-snapshot.json")["events"]), 1)
 
     def test_private_files_and_installer_payload(self) -> None:
         """Persist every new board artifact as 0600 and ship its runtime/test dependencies."""
@@ -348,8 +321,8 @@ class BoardTests(BoardFixture):
         board.mark_notified(self.state, [identity], NOW)
         for name in ("board.json", "memory/preferences.json", "memory/feedback.jsonl", "memory/notified.json"):
             self.assertEqual(stat.S_IMODE((self.state.base / name).stat().st_mode), 0o600)
-        for name in ("gtd_board.py", "gtd_feedback.py", "gtd_board_notifications.py", "gtd_memory.py",
-                     "gtd_threads.py", "test_board.py", "test_board_support.py"):
+        for name in ("gtd_board.py", "gtd_board_merge.py", "gtd_feedback.py", "gtd_board_notifications.py", "gtd_memory.py",
+                     "gtd_threads.py", "test_board.py", "test_board_merge.py", "test_board_notifications.py", "test_board_support.py"):
             self.assertIn("scripts/" + name, install.PAYLOAD)
 
     def test_cli_build_show_feedback_notifications(self) -> None:

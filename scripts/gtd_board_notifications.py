@@ -50,8 +50,9 @@ def select_notifications(state: gtd.State, value: dict[str, Any], now: dt.dateti
     day = now.date().isoformat()
     if not quiet_time(state.config(), now):
         eligible = [item for item in value["items"]
-                    if not board.suppressed(prefs, item["id"], now, snoozed=True)
-                    and not recently_notified(log, item["id"], now)]
+                    if not any(board.suppressed(prefs, identity, now, snoozed=True)
+                               or recently_notified(log, identity, now)
+                               for identity in [item["id"], *item.get("merged_ids", [])])]
         for item in eligible:
             if item["quadrant"] == 1:
                 text = "；".join(item["urgency_reasons"]) + "\n" + (item["remaining"] or "可以开始处理这件事。")

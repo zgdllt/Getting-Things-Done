@@ -636,7 +636,7 @@ def capture(state, title, bucket="inbox", project=""):
     return {"ok": True, "candidate_key": key}
 
 
-def backfill(state, days, git_roots=None, force=False):
+def backfill(state: State, days: int, git_roots: list[str] | None = None, force: bool = False) -> dict:
     """Queue the last `days` of local Codex/Claude sessions and git commits, then extract them.
 
     For a first run without Computer History: the same extractor, clarification
@@ -651,7 +651,8 @@ def backfill(state, days, git_roots=None, force=False):
     end = dt.datetime.now(dt.timezone.utc)
     start = end - dt.timedelta(days=days)
     roots = [Path(root).expanduser() for root in git_roots] if git_roots else None
-    events = gtd_local.window(start, end, roots)
+    events = gtd_local.window(start, end, roots,
+                             agent_replies=bool(state.config().get("local_include_agent_replies", False)))
     batches = chunk_records(events)
     with state.lock(), state.db:
         for batch in batches:

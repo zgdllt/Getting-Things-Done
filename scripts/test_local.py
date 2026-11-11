@@ -16,6 +16,7 @@ import gtd_sources
 import gtd_options
 import gtd_local
 import gtd_provider
+import gtd_threads
 
 UTC = dt.timezone.utc
 T0 = dt.datetime(2026, 11, 4, 10, 0, tzinfo=UTC)
@@ -240,6 +241,7 @@ class BackfillTest(unittest.TestCase):
         start, end, roots = window.call_args.args
         self.assertAlmostEqual((end - start).total_seconds(), 3 * 86400, delta=1)
         self.assertEqual(roots, [Path("~/code").expanduser()])
+        self.assertEqual(window.call_args.kwargs, {"agent_replies": False})
         candidate = self.state.rows("SELECT key, state, evidence FROM candidates")[0]
         self.assertEqual((candidate["key"], candidate["state"]), ("send-draft", "inbox"))
         self.assertEqual(len(json.loads(candidate["evidence"])), 3)
@@ -261,15 +263,20 @@ class BackfillTest(unittest.TestCase):
         self.assertEqual(value["pending_batches"], 1)
         self.assertIn("synthetic outage", value["error"])
 
-    def test_window_keeps_newest_events_past_the_cap(self):
+    def test_window_keeps_newest_events_past_the_cap(self) -> None:
+        """Filter both session sources before capping, while preserving default replies."""
         events = [gtd_local._record(f"k{i}", iso(i), "git.commit", "local_git_commit", "git", "r", "c")
                   for i in range(5)]
+        reply = gtd_local._record("reply", iso(6), "agent.final_answer", "local_codex_session", "Codex", "r", "done")
+        claude = {**reply, "event_key": "claude", "source_type": "local_claude_session"}
         with patch.object(gtd_local, "MAX_EVENTS", 2), \
-             patch.object(gtd_local, "codex_events", return_value=events), \
-             patch.object(gtd_local, "claude_events", return_value=[]), \
+             patch.object(gtd_local, "codex_events", return_value=events + [reply]), \
+             patch.object(gtd_local, "claude_events", return_value=[claude]), \
              patch.object(gtd_local, "git_events", return_value=[]):
-            kept = gtd_local.window(T0, T0 + dt.timedelta(hours=1))
+            kept = gtd_local.window(T0, T0 + dt.timedelta(hours=1), agent_replies=False)
+            unfiltered = gtd_local.window(T0, T0 + dt.timedelta(hours=1))
         self.assertEqual([event["event_key"] for event in kept], ["k3", "k4"])
+        self.assertEqual([event["event_key"] for event in unfiltered], ["reply", "claude"])
 
 
 class LocalLiveSourceTest(unittest.TestCase):
@@ -345,6 +352,44 @@ class LocalLiveSourceTest(unittest.TestCase):
         with patch.object(gtd_local, "CODEX_ROOT", empty), patch.object(gtd_local, "CLAUDE_ROOT", empty):
             status = gtd_local.LocalHistoryAdapter({"local_git_roots": [str(empty)]}).status()
         self.assertEqual((status["state"], status["adapter"]), ("unavailable", "local_history"))
+
+    def test_reply_filtering_in_live_window_and_backfill(self) -> None:
+        """Default intake excludes replies; explicit opt-in affects all local intake paths."""
+        user = self.event("user", 1)
+        reply = {**user, "event_key": "reply", "kind": "agent.final_answer"}
+        commit = {**user, "event_key": "commit", "kind": "git.commit", "source_type": "local_git_commit"}
+        for include in (False, True):
+            config = self.state.config()
+            if include:
+                config["local_include_agent_replies"] = True
+            gtd.atomic_json(self.state.base / "config.json", config)
+            with self.state.db:
+                self.state.db.execute("DELETE FROM cursors")
+                self.state.db.execute("DELETE FROM batches")
+            with patch.object(gtd_local, "codex_events", return_value=[user, reply]), \
+                 patch.object(gtd_local, "claude_events", return_value=[]), \
+                 patch.object(gtd_local, "git_events", return_value=[commit]), \
+                 patch.object(gtd, "process", return_value={}):
+                live = gtd.spool(self.state, "")
+                self.assertEqual(live["records"], 3 if include else 2)
+                adapter = gtd_local.LocalHistoryAdapter(config)
+                events, _ = adapter.window("", self.now - dt.timedelta(hours=1), self.now)
+                self.assertEqual(len(events), 3 if include else 2)
+                value = gtd.backfill(self.state, 1, force=True)
+                self.assertEqual(value["events"], 3 if include else 2)
+                payloads = [e for row in self.state.rows("SELECT payload FROM batches") for e in json.loads(row["payload"])]
+                self.assertEqual(any(e["kind"] == "agent.final_answer" for e in payloads), include)
+
+    def test_activity_scan_retains_replies_without_own_activity_credit(self) -> None:
+        """Thread context still reads replies, but only human events set last activity."""
+        user = self.event("user", 5)
+        reply = {**self.event("reply", 0), "kind": "agent.final_answer"}
+        with patch.object(gtd_local, "codex_events", return_value=[user, reply]), \
+             patch.object(gtd_local, "claude_events", return_value=[]), \
+             patch.object(gtd_local, "git_events", return_value=[]):
+            scanned = gtd_threads.scan_activity(self.now, 1, [], self.state.base / "activity.json")
+        self.assertEqual(scanned["p"]["last"], user["timestamp"])
+        self.assertEqual(scanned["p"]["replies"], [[reply["timestamp"], reply["text"]]])
 
 
 if __name__ == "__main__":

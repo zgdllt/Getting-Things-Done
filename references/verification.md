@@ -141,3 +141,79 @@ cannot bind `127.0.0.1` (`PermissionError: Operation not permitted`).
 uses `/bin/ps`, which this sandbox prohibits. Those source/tests were not changed or skipped, and
 the complete suite is not claimed as passing. No live-state build, model call, Apple write, UI/Swift
 change, notification delivery or commit was performed.
+
+## Board tuning
+
+The five approved smoke-run changes replace the earlier no-base project importance,
+all-candidate inclusion and source-order board behavior above. Other Board data layer
+decisions remain in effect. Runtime merging lives in `gtd_board_merge.py`; the installer
+includes it and the split test helpers imported by `test_board`.
+
+Decisions added where the tuning brief left details open:
+
+- Activity/update recency uses inclusive elapsed windows: 0–7 days, then >7–14 days.
+  Future timestamps do not qualify. The activity cache's `last` is already restricted to
+  own messages/commits; assistant replies remain context for the unchanged thread scan.
+  Cards associated with a project inherit its activity base alongside the existing rules.
+- Project associations continue to use exact normalized names, without title guesses or
+  new fuzzy project matching. Eligibility route (c) requires a visible project source;
+  explicitly dated/accepted candidates can still appear without one. Existing native
+  `target_id` suppression takes precedence, including completed or undated reminders.
+- Empty evidence means unknown provenance, not affirmative evidence of assistant-only
+  origin. A nonempty all-assistant evidence list excludes every inclusion route. Such
+  inbox rows remain unsorted; excluded accepted rows are omitted without changing the DB.
+  Hidden candidates and candidates already represented by native reminders are not
+  counted as unsorted. Unsorted entries retain their candidate fields, add `id`, decode
+  `evidence`, and sort by update instant descending, then source ID before the cap of 50.
+- Missing deadlines never match each other. Same-day matching compares nonempty ISO date
+  parts as stored, with normalized nonempty titles. Next-step containment is normalized
+  and limited to a candidate's own matched project. Candidate sibling matching likewise
+  requires a nonempty shared normalized project.
+- Merge groups are transitive connected components, so matching a third member cannot
+  strand an earlier duplicate. Survivor priority is reminder, event, project, candidate;
+  equal-priority ties use the smallest source ID. `merged_ids` contains the other IDs,
+  sorted and excluding the survivor. `merged` counts absorbed visible source cards,
+  not groups; unsorted entries are not merged.
+- The survivor retains its title, due/date source, status and project association.
+  Importance/urgency and their explanatory reasons come from the strongest member for
+  each score independently. The quadrant is recomputed unless pinned. A valid survivor
+  pin wins; otherwise valid alias pins use source priority then ID. Each source pin still
+  expires on its own due/status fingerprint. Feedback resolves aliases before writing
+  preferences or logging, so the log's `item_id` is the survivor's identity.
+- Completion/tool feedback suppresses merged aliases as well as the source being
+  completed; not-important hides all known members for the same 30-day window. Source
+  suppression precedes merging, allowing an explicitly reopened project to return while
+  its completed task aliases remain hidden. A project survivor still uses its memory
+  stage for terminal visibility rather than a permanent hide on the project itself.
+  Snoozes and delivery receipt checks inspect every currently merged ID, preserving
+  existing four-hour snoozes and twelve-hour dedupe when source priority changes.
+- `updated_at` retains its board-generation meaning. Numeric `activity_at` provides the
+  sorting timestamp: latest own activity/memory update for projects, candidate update,
+  or native `modified_at` (falling back to `updated_at`, then `created_at`). Missing
+  timestamps sort last; a merged card uses its newest member timestamp. Final ties use
+  source ID. Task parents point to the surviving project identity after merging, and are
+  cleared for self-links or absent parents. `quadrant_counts` mirrors existing `counts`;
+  neither includes unsorted candidates, and Q4 has no item cap.
+- Local reply filtering happens before the event cap, so excluded replies cannot crowd
+  out own activity. Both adapter intake methods follow `local_include_agent_replies`;
+  direct `gtd_local.window` calls retain their default reply-inclusive behavior.
+- New production/test modules and the expanded board/local/test modules stay below
+  400 lines, with annotated, documented new functions and stdlib dependencies only.
+  The pre-existing oversized `gtd.py` receives only the requested backfill argument
+  change and signature annotations; it is not split as an unrelated refactor.
+
+Validation used `/opt/homebrew/bin/python3.15 -B -m unittest` from `scripts/` and a
+worktree-local `TMPDIR`. The full requested ten-module suite ran 163 tests: 161 passed;
+the same two unchanged sandbox integration tests errored (localhost bind denied;
+worker-stop times out because `/bin/ps` is prohibited). No tests were skipped. The
+board/local focused suite accounts for 68 tests. AST checks confirmed annotations and
+docstrings in the board/feedback/new test modules; `git diff --check` passed.
+
+A realistic smoke run used `cp` for the required JSON inputs and Python SQLite's backup
+API from a read-only source connection for the DB. The board was built only in the
+temporary copy, reusing the copied activity cache with no refresh. Its recorded clock
+was `2026-11-11T16:01:18.500743+00:00`: Q1 **4**, Q2 **144**, Q3 **3**, Q4 **4**,
+**171** unsorted (newest 50 exposed), **13** absorbed cards, **155** board items.
+The temporary state directory was deleted; the count-only report is in the worktree's
+ignored `.test-artifacts/board-tuning-smoke.json`. No live-state write, model call,
+Apple write, delivery, UI change or commit was performed.

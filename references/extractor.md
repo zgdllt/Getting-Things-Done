@@ -39,6 +39,12 @@ Ordinary browsing can yield no candidates and no questions; empty arrays are val
 Ignore the GTD tool's own notifications and generated summaries as new commitments.
 Distinguish the user's typed statements from text merely visible on screen.
 
+For local coding-agent sessions, do NOT turn the agent's progress reports or
+suggestions into candidates. Do NOT extract the user's instructions to an agent
+about work that agent is already doing as separate tasks for the user.
+DO extract the user's own commitments and deadlines, requests from other people,
+waiting-for items, and administrative or life tasks when supported by the evidence.
+
 Use stable, short, semantic keys, including the project or date when it distinguishes
 two separate commitments. Reuse a matching existing candidate key. Do not recreate
 an existing formal reminder as a new task. A possible change to an existing task
