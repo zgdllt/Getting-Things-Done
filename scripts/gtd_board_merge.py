@@ -18,21 +18,50 @@ def quadrant(item: BoardItem) -> int:
         3 if item["urgency"] >= 0.7 else 4)
 
 
+def bigrams(text: str) -> set[str]:
+    """Use unique adjacent characters of the existing normalized title spelling."""
+    text = gtd_threads.norm(text)
+    return {text[index:index + 2] for index in range(len(text) - 1)}
+
+
+def next_step(item: BoardItem, contexts: dict[str, Any]) -> str:
+    """Read a project's confirmed next step without inferring task associations."""
+    return contexts.get(item["project"], {}).get("memory", {}).get("next_step") or ""
+
+
+def same_date_bigrams(left: BoardItem, right: BoardItem, contexts: dict[str, Any]) -> bool:
+    """Match same-date bigram overlap, including shorter confirmed project plans."""
+    texts = [next_step(item, contexts) or item["title"] if item["kind"] == "project" else item["title"]
+             for item in (left, right)]
+    a, b = (bigrams(text) for text in texts)
+    if a | b and len(a & b) / len(a | b) >= 0.3:
+        return True
+    for project, other in ((left, right), (right, left)):
+        if project["kind"] == "project":
+            step = bigrams(next_step(project, contexts))
+            if step and len(step & bigrams(other["title"])) / len(step) >= 0.6:
+                return True
+    return False
+
+
 def duplicate(left: BoardItem, right: BoardItem, contexts: dict[str, Any]) -> bool:
     """Match explicit same-day titles, a project's next step, or close sibling tasks."""
     a, b = gtd_threads.norm(left["title"]), gtd_threads.norm(right["title"])
     if not a or not b:
         return False
     similarity = SequenceMatcher(None, a, b).ratio()
-    if left["due"] and right["due"] and left["due"][:10] == right["due"][:10] and similarity >= 0.6:
-        return True
+    same_date = bool(left["due"] and right["due"] and left["due"][:10] == right["due"][:10])
+    if same_date:
+        if similarity >= 0.6 or same_date_bigrams(left, right, contexts):
+            return True
     if left["project"] and left["project"] == right["project"]:
         if left["kind"] == right["kind"] == "task" and similarity >= 0.85:
             return True
         if {left["kind"], right["kind"]} == {"task", "project"}:
             task = left if left["kind"] == "task" else right
-            step = gtd_threads.norm(contexts.get(task["project"], {}).get("memory", {}).get("next_step") or "")
-            return bool(step and step in gtd_threads.norm(task["title"]))
+            step = gtd_threads.norm(next_step(task, contexts))
+            title = gtd_threads.norm(task["title"])
+            return bool(step and (step in title or (same_date and len(step) >= 4 and step[-4:] in title)))
     return False
 
 
@@ -75,6 +104,21 @@ def merge(items: list[BoardItem], contexts: dict[str, Any]) -> list[BoardItem]:
         parent = aliases.get(item["parent"])
         item["parent"] = parent if parent != item["id"] else None
     return survivors
+
+
+def hierarchy(items: list[BoardItem]) -> None:
+    """Mark nested tasks and collect their surviving IDs in final board order."""
+    by_id = {item["id"]: item for item in items}
+    for item in items:
+        if item["parent"] not in by_id:
+            item["parent"] = None
+        item["top_level"] = not (item["kind"] == "task" and item["parent"] and not item["due"])
+        item["children"], item["children_count"] = [], 0
+    for item in items:
+        if not item["top_level"]:
+            parent = by_id[item["parent"]]
+            parent["children"].append(item["id"])
+            parent["children_count"] += 1
 
 
 def find(items: list[BoardItem], identity: str) -> BoardItem | None:

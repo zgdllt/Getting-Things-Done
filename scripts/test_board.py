@@ -29,8 +29,11 @@ class BoardTests(BoardFixture):
         """Combine learned importance and deadlines into all four quadrants."""
         self.project()
         self.declare("Alpha")
+        self.project("Quiet", stage=None)
+        self.scanned["Quiet"].update(last=(NOW - dt.timedelta(days=20)).isoformat(), dates=[])
+        self.cache()
         for key, project, due in (("q1", "Alpha", "2026-11-12"), ("q2", "Alpha", None),
-                                  ("q3", None, "2026-11-09"), ("q4", None, None)):
+                                  ("q3", "Quiet", "2026-11-09"), ("q4", None, None)):
             self.candidate(key, project, due, status="accepted" if key == "q4" else "inbox")
         cards = self.build()
         self.assertEqual([cards[f"candidate:q{i}"]["quadrant"] for i in range(1, 5)], [1, 2, 3, 4])
@@ -38,12 +41,12 @@ class BoardTests(BoardFixture):
         self.assertIn("已逾期 2 天", cards["candidate:q3"]["urgency_reasons"])
         self.assertIn("你声明的重点项目", cards["candidate:q2"]["importance_reasons"])
         stored = board.read_json(self.state.base / "board.json")
-        self.assertEqual(sum(stored["counts"].values()), len(cards))
+        self.assertEqual(sum(stored["counts"].values()) + stored["nested_count"], len(cards))
         self.assertEqual(cards["candidate:q1"]["project"], "alpha")
 
     def test_deadline_thresholds(self) -> None:
         """Keep exact one-, three-, and seven-day urgency boundaries."""
-        for hours, expected in ((-1, 1.0), (0, 0.9), (24, 0.9), (24.01, 0.7),
+        for hours, expected in ((-72.01, 0.4), (-72, 1.0), (-1, 1.0), (0, 0.9), (24, 0.9), (24.01, 0.7),
                                 (72, 0.7), (72.01, 0.4), (168, 0.4), (168.01, 0.0)):
             with self.subTest(hours=hours):
                 due = (NOW + dt.timedelta(hours=hours)).isoformat()
@@ -136,6 +139,34 @@ class BoardTests(BoardFixture):
         self.write("memory/preferences.json", prefs)
         self.assertEqual(self.build()[identity]["importance"], 1.0)
 
+    def test_dated_standalone_importance_keeps_existing_learning(self) -> None:
+        """Give unmatched dated tasks a base while retaining weights and dismissals."""
+        standalone = self.candidate("admin", None, "2026-11-12", title="缴纳住宿费")
+        unmatched = self.candidate("life", "Missing", "2026-11-13", title="预约牙科检查")
+        undated = self.candidate("undated", None, status="accepted", title="订购纸张")
+        invalid = self.candidate("invalid", None, "tomorrow", status="accepted", title="购买餐具")
+        self.project("Quiet", stage=None)
+        self.scanned["Quiet"].update(last=(NOW - dt.timedelta(days=20)).isoformat(), dates=[])
+        self.cache()
+        linked = self.candidate("linked", "Quiet", "2026-11-14", title="校准麦克风")
+        cards = self.build()
+        for identity in (standalone, unmatched):
+            self.assertEqual(cards[identity]["importance"], 0.5)
+            self.assertEqual(cards[identity]["importance_reasons"], ["有截止日期"])
+        self.assertEqual(cards[standalone]["quadrant"], 1)
+        for identity in (undated, invalid, linked):
+            self.assertEqual(cards[identity]["importance"], 0)
+            self.assertNotIn("有截止日期", cards[identity]["importance_reasons"])
+        prefs = board.preferences(self.state)
+        prefs["weights"]["missing"] = -0.2
+        self.write("memory/preferences.json", prefs)
+        for key in ("dismissed1", "dismissed2"):
+            self.candidate(key, "Missing", status="dismissed")
+        item = self.build()[unmatched]
+        self.assertEqual(item["importance"], 0.2)
+        self.assertIn("已忽略 2 条相关事项", item["importance_reasons"])
+        self.assertIn("你的反馈权重 -0.20", item["importance_reasons"])
+
     def test_cache_refresh_and_cache_only_mode(self) -> None:
         """Refresh only when allowed, never infer, and reuse even stale inference as-is."""
         identity = self.project(stage=None)
@@ -193,7 +224,7 @@ class BoardTests(BoardFixture):
         self.assertEqual(value["unsorted"]["count"], 6)
         self.assertEqual({row["key"] for row in value["unsorted"]["items"]},
                          {"stale", "orphan", "older", "bad", "future", "tool"})
-        self.assertEqual(sum(value["counts"].values()), len(cards))
+        self.assertEqual(sum(value["counts"].values()) + value["nested_count"], len(cards))
 
     def test_assistant_only_evidence_excludes_every_inclusion_route(self) -> None:
         """Read evidence JSON and reject assistant-only cards even if dated or accepted."""

@@ -217,3 +217,73 @@ was `2026-11-11T16:01:18.500743+00:00`: Q1 **4**, Q2 **144**, Q3 **3**, Q4 **4**
 The temporary state directory was deleted; the count-only report is in the worktree's
 ignored `.test-artifacts/board-tuning-smoke.json`. No live-state write, model call,
 Apple write, delivery, UI change or commit was performed.
+
+## Board tuning 2
+
+This data-layer update supersedes the earlier all-item quadrant counts and the zero
+base importance for dated standalone candidates. Other Board data layer and Board
+tuning decisions remain in effect.
+
+- Every surviving item has a boolean `top_level`. Only a task with a surviving parent
+  and no valid due date is nested. Dated tasks retain their parent and remain top-level;
+  tasks whose parent is absent are top-level. The flat `items` list keeps every nested
+  ID available to feedback, pins and notification selection/receipts.
+- `counts` and `quadrant_counts` both count top-level cards only; `nested_count` counts
+  the remaining items. Hierarchy is derived after merging and final board sorting.
+  `children` lists nested survivor IDs in that same order, and `children_count` is its
+  length. These fields are present on every card (empty for leaves), so a native card
+  that absorbs a project also retains the project's nested tasks after parent remapping.
+- Existing sequence/containment/sibling rules remain. Additional same-date matching
+  uses unique adjacent-character bigrams of `gtd_threads.norm(title)`; projects use
+  `norm(next_step or title)`. A nonempty union with Jaccard similarity at least 0.3
+  matches, as does coverage of at least 60 percent of a project's nonempty next-step
+  bigram set by the other item's title. Empty sets cannot establish a new match.
+- The brief's exact deployment example does not satisfy those thresholds by itself:
+  its first task has Jaccard 0.1212 and 50 percent coverage against the plan's next step,
+  and Jaccard 0.2128 against the second task. To satisfy the explicit example without
+  lowering either threshold, an additional narrow fallback is used: a task and its
+  explicitly matched project on the same nonempty due date also match when the task's
+  normalized title contains the final four normalized characters of the confirmed next
+  step (`真机部署` in the example). This is an implementation assumption resolving the
+  conflicting requirements, not a change to the stated bigram thresholds or project
+  association rules. Regressions check the exact supplied titles, different projects,
+  absent/different dates, and unrelated homework-event/paper-review deadlines.
+- Project links are resolved before importance scoring. A task with a valid due date
+  and no visible matched project starts at 0.5, with reason `有截止日期`. Existing project
+  signals, kept/dismissed history, learned weights, clamping and pins still apply.
+  Undated/invalid-date standalone tasks and dated tasks with a matched project gain no
+  additional base from this rule.
+- Only `candidate` deadlines more than 72 elapsed hours overdue receive urgency 0.4
+  and reason `已逾期 N 天，可能已处理`. Exactly 72 hours remains urgency 1.0. Existing
+  date-only end-of-day parsing and local-calendar-day explanations remain unchanged;
+  reminders, events and project plans keep their existing overdue urgency.
+
+Validation on 2026-11-11 used `/opt/homebrew/bin/python3.15 -B -m unittest` from
+`scripts/` with a worktree-local `TMPDIR`. The focused command
+`test_board test_board_merge test_board_notifications` passed all 76 tests, including
+nested-ID move/start/snooze/completion/receipt behavior, native-parent remapping,
+the exact 0.3 Jaccard and 60 percent coverage boundaries, the required deployment
+example, standalone learning, and stale-overdue boundaries. Independent read-only
+review found no additional correctness issues. Modified Python modules are at most
+385 lines; AST checks confirmed syntax, annotations and docstrings. Dependencies
+remain standard-library only, and `git diff --check` passed.
+
+The complete requested suite (`test_gtd test_local test_options test_providers
+test_workbench test_files test_clarification test_release test_threads test_board
+test_board_merge test_board_notifications`) ran 199 tests: 197 passed and the same two
+unchanged integration tests errored under the managed sandbox. The workbench HTTP test
+cannot bind `127.0.0.1` (`PermissionError: Operation not permitted`). The file-worker
+stop test times out; `/bin/ps` was separately confirmed prohibited. No tests were
+skipped, and the complete suite is not claimed as passing. These invocation counts
+include merge/notification classes imported by `test_board` and explicitly requested
+again as separate modules.
+
+A smoke build copied JSON inputs with `cp` and the SQLite DB with its backup API from
+a read-only connection. Only the temporary copy was built, reusing cached activity.
+At `2026-11-12T00:28:52.952781+08:00` (`2026-11-11T16:28:52.952781Z`), the top-level
+counts were Q1 **5**, Q2 **26**, Q3 **0**, Q4 **3**, with **121** nested items,
+**174** unsorted candidates, **14** absorbed cards and **155** flat board items.
+These counts describe this later snapshot/local date. The temporary state was deleted;
+the count-only report is in ignored `.test-artifacts/board-tuning2-smoke.json`.
+No live-state write, model call, Apple write, notification delivery, UI change or
+commit was performed.

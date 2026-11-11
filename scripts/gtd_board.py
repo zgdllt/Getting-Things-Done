@@ -40,6 +40,9 @@ class BoardItem(TypedDict):
     activity_at: float
     parent: str | None
     merged_ids: list[str]
+    top_level: bool
+    children: list[str]
+    children_count: int
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -147,6 +150,9 @@ def importance(item: BoardItem, context: dict[str, Any], declared: dict[str, Any
     if item["kind"] in ("reminder", "event"):
         score += 0.5
         reasons.append("正式提醒事项" if item["kind"] == "reminder" else "日历安排")
+    elif item["kind"] == "task" and item["due"] and item["parent"] is None:
+        score += 0.5
+        reasons.append("有截止日期")
     project = item["project"]
     if project:
         if own_activity(context, now, 7):
@@ -185,6 +191,8 @@ def urgency(due: str | None, source: str | None, now: dt.datetime) -> tuple[floa
         return 0.0, ["未设截止时间"]
     days = (end.date() - now.date()).days
     if end < now:
+        if source == "candidate" and now - end > dt.timedelta(days=3):
+            return 0.4, [f"已逾期 {-days} 天，可能已处理"]
         return 1.0, [f"已逾期 {-days} 天" if days < 0 else "已逾期（今天）"]
     if source == "plan" and days == 0:
         return 0.8, ["计划今天继续"]
@@ -208,6 +216,7 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
     declared = {gtd_threads.norm(brief.get("title") or name): True
                 for name, brief in (config.get("project_briefs") or {}).items()}
     items: list[BoardItem] = []
+    projects: dict[str, BoardItem] = {}
 
     def add(identity: str, kind: Any, title: str, project: str | None, status: Any,
             due: Any = None, source: Any = None, context: dict[str, Any] | None = None,
@@ -230,7 +239,8 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
                            "left_off": entry.get("left_off") or inference.get("left_off") or entry.get("note"),
                            "remaining": entry.get("remaining") or entry.get("next_step") or inference.get("remaining"),
                            "updated_at": now.isoformat(), "activity_at": recency(updated),
-                           "parent": None, "merged_ids": []}
+                           "parent": projects.get(project, {}).get("id"), "merged_ids": [],
+                           "top_level": True, "children": [], "children_count": 0}
         item["importance"], item["importance_reasons"] = importance(item, context, declared, decisions, prefs, now)
         item["urgency"], item["urgency_reasons"] = urgency(due, item["due_source"], now)
         item["quadrant"] = gtd_board_merge.quadrant(item)
@@ -298,22 +308,18 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
                 updated=row.get("modified_at") or row.get("updated_at") or row.get("created_at"))
     if prefs["pins"] != original_pins or prefs != preferences(state):
         gtd.atomic_json(state.base / "memory/preferences.json", prefs)
-    for item in items:
-        if item["kind"] != "project" and item["project"] in projects:
-            item["parent"] = projects[item["project"]]["id"]
     items = [item for item in items if not suppressed(prefs, item["id"], now)]
     merged = gtd_board_merge.merge(items, contexts)
     merged_count = len(items) - len(merged)
     items = merged
-    visible = {item["id"] for item in items}
-    for item in items:
-        if item["parent"] not in visible:
-            item["parent"] = None
     items.sort(key=lambda item: (item["quadrant"], -item["urgency"], -item["importance"],
                                  -item["activity_at"], item["id"]))
+    gtd_board_merge.hierarchy(items)
     unsorted.sort(key=lambda row: (-recency(row["updated_at"]), row["id"]))
-    counts = {quadrant: sum(item["quadrant"] == quadrant for item in items) for quadrant in range(1, 5)}
+    counts = {quadrant: sum(item["top_level"] and item["quadrant"] == quadrant for item in items)
+              for quadrant in range(1, 5)}
     board = {"generated_at": now.isoformat(), "items": items, "counts": counts, "quadrant_counts": counts,
+             "nested_count": sum(not item["top_level"] for item in items),
              "unsorted": {"count": len(unsorted), "items": unsorted[:50]}, "merged": merged_count}
     gtd.atomic_json(state.base / "board.json", board)
     return board

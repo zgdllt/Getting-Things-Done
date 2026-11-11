@@ -15,6 +15,44 @@ from test_board_support import BoardFixture, NOW
 class NotificationTests(BoardFixture):
     """Verify preview, delivery receipts and local-time notification behavior."""
 
+    def test_nested_ids_support_notification_receipts_and_feedback(self) -> None:
+        """Keep nested tasks actionable even when they do not count as top-level cards."""
+        project = self.project()
+        identity = self.candidate(title="整理传感器线束")
+        self.feedback(identity, "move", 1)
+        item = self.build()[identity]
+        self.assertFalse(item["top_level"])
+        self.assertEqual(item["parent"], project)
+        self.assertIn(identity, [row["item_id"] for row in self.select()])
+        self.feedback(identity, "notification", "later")
+        self.assertNotIn(identity, [row["item_id"] for row in self.select()])
+        later = NOW + dt.timedelta(hours=4)
+        self.assertIn(identity, [row["item_id"] for row in self.select(later)])
+        board.mark_notified(self.state, [identity], later)
+        self.assertNotIn(identity, [row["item_id"] for row in self.select(later)])
+        self.feedback(identity, "notification", "start", later)
+        self.assertEqual(self.build(later)[identity]["status"], "doing")
+        self.feedback(identity, "notification", "done", later)
+        self.assertNotIn(identity, self.build(later))
+        self.assertEqual(self.build(later)[project]["children"], [])
+        self.assertEqual(self.state.rows("SELECT state FROM candidates")[0]["state"], "inbox")
+
+    def test_stale_candidates_lose_urgency_but_reminders_still_notify(self) -> None:
+        """Lower only candidates more than 72 hours overdue, preserving formal alerts."""
+        due = (NOW - dt.timedelta(days=4)).date().isoformat()
+        stale = self.candidate("stale", None, due, title="核对医保资料")
+        self.write("last-snapshot.json", {"reminders": [{"id": "r", "title": "缴纳住宿费", "due": due}]})
+        cards = self.build()
+        self.assertEqual(cards[stale]["urgency"], 0.4)
+        self.assertEqual(cards[stale]["urgency_reasons"], ["已逾期 4 天，可能已处理"])
+        self.assertEqual(cards[stale]["quadrant"], 2)
+        self.assertEqual(cards["reminder:r"]["urgency"], 1.0)
+        self.assertEqual([row["item_id"] for row in self.select()], ["reminder:r"])
+        for source in ("reminder", "calendar", "plan"):
+            self.assertEqual(board.urgency(due, source, NOW), (1.0, ["已逾期 4 天"]))
+        for days in (2, 3):
+            self.assertEqual(board.urgency((NOW - dt.timedelta(days=days)).date().isoformat(), "candidate", NOW)[0], 1.0)
+
     def test_merged_aliases_preserve_snoozes_and_delivery_receipts(self) -> None:
         """A higher-priority native source cannot reset an alias's notification limits."""
         for mode, hours in (("snooze", 4), ("receipt", 12)):

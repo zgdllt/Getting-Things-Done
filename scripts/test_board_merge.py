@@ -28,6 +28,97 @@ class MergeTests(BoardFixture):
             self.candidate(key, project, status="accepted", title="提交报告")
         self.assertEqual(len(self.build()), 4)
 
+    def test_same_date_bigrams_match_reordered_titles(self) -> None:
+        """Match character bigrams even when title order defeats sequence matching."""
+        first = self.candidate("a", None, "2026-11-12", title="abcdefghij")
+        alias = self.candidate("b", None, (NOW + dt.timedelta(days=1)).isoformat(), title="fghijabcde")
+        other = self.candidate("c", None, "2026-11-13", title="fghijabcde")
+        cards = self.build()
+        self.assertEqual(set(cards), {first, other})
+        self.assertEqual(cards[first]["merged_ids"], [alias])
+
+    def test_same_date_jaccard_boundary_and_project_title_fallback(self) -> None:
+        """Include Jaccard 0.3, exclude 3/11, and fall back to a project without a step."""
+        first = self.candidate("a", None, "2026-11-12", title="abcdefg")
+        alias = self.candidate("b", None, "2026-11-12", title="efgabxyz")
+        below = self.candidate("c", None, "2026-11-13", title="abcdefg")
+        other = self.candidate("d", None, "2026-11-13", title="efgabxyzw")
+        project = self.project("abcdefg", "paused", next_at="2026-11-14")
+        fallback = self.candidate("e", None, "2026-11-14", title="efgabxyz")
+        cards = self.build()
+        self.assertEqual(set(cards), {first, below, other, project})
+        self.assertEqual(cards[first]["merged_ids"], [alias])
+        self.assertEqual(cards[project]["merged_ids"], [fallback])
+
+    def test_same_date_project_step_bigram_coverage(self) -> None:
+        """Cover exactly 60 percent of a plan even if Jaccard is below 0.3."""
+        alpha = self.project("Alpha", "paused", next_at="2026-11-12", next_step="abcdef")
+        beta = self.project("Beta", "paused", next_at="2026-11-13", next_step="abcdef")
+        alias = self.candidate("a", None, "2026-11-12", title="abcduvwxyz0123456789")
+        other = self.candidate("b", None, "2026-11-13", title="abuvwxyz0123456789")
+        cards = self.build()
+        self.assertEqual(set(cards), {alpha, beta, other})
+        self.assertEqual(cards[alpha]["merged_ids"], [alias])
+        self.assertEqual(cards[beta]["merged_ids"], [])
+
+    def test_real_deployment_titles_merge_into_paused_plan(self) -> None:
+        """Keep the paused plan card for the three supplied deployment descriptions."""
+        project = self.project("booster_lab", "paused", next_at="2026-11-12", next_step="上课时尝试真机部署")
+        first = self.candidate("course", "booster_lab", "2026-11-12",
+                               title="在 11 月 12 日课程中尝试 Karpathy Loop 运控真机部署")
+        second = self.candidate("tomorrow", "booster_lab", "2026-11-12",
+                                title="明天（11 月 12 日）上课时尝试真机部署运控（用户自述运控质量已达标…）")
+        cards = self.build()
+        self.assertEqual(set(cards), {project})
+        self.assertEqual(cards[project]["title"], "booster_lab：上课时尝试真机部署")
+        self.assertEqual(cards[project]["due_source"], "plan")
+        self.assertEqual(cards[project]["merged_ids"], sorted([first, second]))
+
+    def test_plan_suffix_requires_same_date_and_matched_project(self) -> None:
+        """The real-case suffix fallback cannot merge a different project or deadline."""
+        project = self.project("booster_lab", "paused", next_at="2026-11-12", next_step="上课时尝试真机部署")
+        title = "在 11 月 12 日课程中尝试 Karpathy Loop 运控真机部署"
+        other = self.candidate("other", "Beta", "2026-11-12", title=title)
+        undated = self.candidate("undated", "booster_lab", status="accepted", title=title)
+        self.assertEqual(set(self.build()), {project, other, undated})
+        self.assertEqual(self.build()[project]["merged_ids"], [])
+        with self.state.db:
+            self.state.db.execute("UPDATE candidates SET suggested_due='2026-11-13' WHERE key='undated'")
+        self.assertEqual(set(self.build()), {project, other, undated})
+
+    def test_unrelated_homework_event_and_paper_review_stay_separate(self) -> None:
+        """A shared deadline cannot merge unrelated homework and paper commitments."""
+        task = self.candidate("paper", None, "2026-11-12", title="评审具身智能论文")
+        event = {"id": "homework", "title": "提交概率论作业", "start": (NOW + dt.timedelta(days=1)).isoformat()}
+        self.write("last-snapshot.json", {"events": [event]})
+        cards = self.build()
+        self.assertEqual(set(cards), {task, f"event:homework:{event['start']}"})
+        self.assertTrue(all(not item["merged_ids"] for item in cards.values()))
+
+    def test_nested_metadata_counts_and_children_follow_board_order(self) -> None:
+        """Count only top-level cards, keeping dated children separate and undated IDs reachable."""
+        project = self.project()
+        older = self.candidate("older", "Alpha", title="整理传感器线束", updated=NOW - dt.timedelta(days=1))
+        newer = self.candidate("newer", "Alpha", title="校准镜头焦距")
+        dated = self.candidate("dated", "Alpha", "2026-11-12", title="缴纳场地租金")
+        standalone = self.candidate("standalone", None, status="accepted", title="订购纸张")
+        value = board.build(self.state, NOW, False)
+        cards = {item["id"]: item for item in value["items"]}
+        self.assertTrue(all(isinstance(item["top_level"], bool) for item in cards.values()))
+        for identity in (newer, older):
+            self.assertFalse(cards[identity]["top_level"])
+            self.assertEqual(cards[identity]["parent"], project)
+        for identity in (project, dated, standalone):
+            self.assertTrue(cards[identity]["top_level"])
+        self.assertEqual(cards[dated]["parent"], project)
+        self.assertEqual(cards[project]["children"], [newer, older])
+        self.assertEqual(cards[project]["children_count"], 2)
+        self.assertEqual(value["nested_count"], 2)
+        self.assertEqual(value["quadrant_counts"], {1: 1, 2: 1, 3: 0, 4: 1})
+        stored = board.read_json(self.state.base / "board.json")
+        self.assertEqual(stored["nested_count"], 2)
+        self.assertEqual(stored["counts"], stored["quadrant_counts"])
+
     def test_project_next_step_containment_without_matching_date(self) -> None:
         """Fold a candidate into its own project's step even with a different deadline."""
         identity = self.project("Alpha", "paused", next_at="2026-11-11", next_step="部署真机")
@@ -57,6 +148,7 @@ class MergeTests(BoardFixture):
         self.declare("Alpha")
         task = self.candidate("step", "Alpha", (NOW - dt.timedelta(hours=1)).isoformat(), title="提交报告")
         child = self.candidate("child", "Alpha", "2026-12-20", title="校对另一份素材")
+        nested = self.candidate("nested", "Alpha", title="清点仪器库存")
         self.assertIn(task, self.build()[identity]["merged_ids"])
         event = {"id": "e", "title": "提交报告", "start": (NOW + dt.timedelta(hours=1)).isoformat()}
         self.write("last-snapshot.json", {"events": [event]})
@@ -71,6 +163,11 @@ class MergeTests(BoardFixture):
         self.assertIn("已逾期（今天）", survivor["urgency_reasons"])
         self.assertIsNone(survivor["parent"])
         self.assertEqual(cards[child]["parent"], "reminder:r")
+        self.assertTrue(cards[child]["top_level"])
+        self.assertEqual(cards[nested]["parent"], "reminder:r")
+        self.assertFalse(cards[nested]["top_level"])
+        self.assertEqual(survivor["children"], [nested])
+        self.assertEqual(survivor["children_count"], 1)
         self.assertEqual(board.read_json(self.state.base / "board.json")["merged"], 3)
 
     def test_feedback_on_alias_updates_survivor(self) -> None:
@@ -117,12 +214,15 @@ class MergeTests(BoardFixture):
         self.project(stage="paused", next_at="2026-11-11", next_step="部署真机")
         alias = self.candidate("step", "Alpha", "2026-11-20", title="部署真机")
         child = self.candidate("child", "Alpha", "2026-11-25", title="买新电脑")
+        nested = self.candidate("nested", "Alpha", status="accepted", title="清点仪器库存")
         prefs = board.preferences(self.state)
         prefs["hidden"]["project:alpha"] = None
         prefs["hidden"][alias] = None
         self.write("memory/preferences.json", prefs)
         cards = self.build()
         self.assertIsNone(cards[child]["parent"])
+        self.assertIsNone(cards[nested]["parent"])
+        self.assertTrue(cards[nested]["top_level"])
         self.assertNotIn("project:alpha", cards)
 
     def test_quadrant_order_and_counts_retain_all_q4_items(self) -> None:
@@ -140,10 +240,10 @@ class MergeTests(BoardFixture):
         self.write("memory/projects.json", memory)
         value = board.build(self.state, NOW, False)
         q4 = [item["id"] for item in value["items"] if item["quadrant"] == 4]
-        self.assertEqual(q4, ["candidate:far", "candidate:newer", "candidate:older"])
+        self.assertEqual(q4, ["candidate:newer", "candidate:older"])
         self.assertEqual(value["quadrant_counts"], value["counts"])
-        self.assertEqual(sum(value["counts"].values()), len(value["items"]))
-        self.assertEqual(value["quadrant_counts"][4], 3)
+        self.assertEqual(sum(value["counts"].values()) + value["nested_count"], len(value["items"]))
+        self.assertEqual(value["quadrant_counts"][4], 2)
         q2 = [item for item in value["items"] if item["quadrant"] == 2]
-        self.assertEqual([item["id"] for item in q2], ["project:alpha", "candidate:weighted", "project:beta"])
-        self.assertLess(q2[0]["activity_at"], q2[1]["activity_at"])
+        self.assertEqual([item["id"] for item in q2], ["candidate:far", "project:alpha", "candidate:weighted", "project:beta"])
+        self.assertLess(q2[1]["activity_at"], q2[2]["activity_at"])
