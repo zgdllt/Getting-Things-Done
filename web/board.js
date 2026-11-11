@@ -10,7 +10,7 @@
   const STAGES = { active: "在推进", tool: "已成工具", paused: "暂停·有计划", blocked: "卡住了", superseded: "被取代", done: "已完成" };
   const DONE_LABEL = { doing: "正在做", done: "已完成", tool: "已经变成工具", blocked: "卡住了", not_important: "不重要" };
   const WEEK = "日一二三四五六";
-  const state = { view: "board", board: null, memory: null, providers: null, expanded: new Set(), q4Open: false,
+  const state = { view: "board", board: null, memory: null, providers: null, notify: null, notifyPoll: null, expanded: new Set(), q4Open: false,
     menuFor: null, undo: null, drag: null, fresh: null, lastLoad: 0, toastTimer: null };
   const main = $("#main"), menu = $("#menu"), toastBox = $("#toast");
 
@@ -95,6 +95,10 @@
   function describe(f) {
     const title = `「${short(f.title || f.item_id, 20)}」`;
     if (f.action === "undo") return `撤销了对${title}的调整`;
+    if (f.action === "reply") return `在通知里回复${title}：${f.value}`;
+    if (f.action === "dismiss") return `划掉了${title}的提醒`;
+    if (f.action === "open") return `点开了${title}的提醒`;
+    if (f.action === "test") return "测试通知收到了回应";
     if (f.action === "move") return `把${title}放到「${Q[f.value]?.name || f.value}」`;
     if (f.action === "notification") return `在通知里对${title}选了「${{ start: "开始", done: "已完成", not_important: "不重要", later: "稍后" }[f.value] || f.value}」`;
     return `把${title}标成「${DONE_LABEL[f.value] || f.value}」`;
@@ -116,8 +120,25 @@
         <tr data-new><td><input data-field="name" placeholder="项目名" aria-label="新项目名"></td><td><select data-field="stage" aria-label="新项目阶段">${stageOptions("active")}</select></td><td><input data-field="next_step" placeholder="下一步"></td><td><input type="date" data-field="next_at" aria-label="计划日期"></td><td><input data-field="note" placeholder="备注"></td><td><button type="button" class="ghost" data-save-project>添加</button></td></tr></tbody></table></article></div>`;
   }
 
+  const ANSWER = { start: "开始", done: "已完成", later: "稍后", not_important: "不重要", reply: "回复", dismiss: "划掉", open: "点开" };
+  function notifySection() {
+    const n = state.notify;
+    if (!n) return '<section class="notify"><p>正在读取通知状态…</p></section>';
+    const native = n.channel === "native";
+    const status = native ? '<p class="ok">已允许系统通知：通知里有「开始 / 已完成 / 稍后 / 不重要」和「回复…」。</p>'
+      : `<p class="warn">还没有获得通知授权，现在只能显示不带按钮的通知。点「发一条测试通知」会请求授权；如果之前点过「不允许」，请到 系统设置 → 通知 → Getting Things Done 打开。${n.detail ? `<br><small>${esc(n.detail)}</small>` : ""}</p>`;
+    const test = n.test_response ? `<p class="ok">收到你的回应：${esc(ANSWER[n.test_response.action] || n.test_response.action)}${n.test_response.text ? `「${esc(n.test_response.text)}」` : ""}</p>`
+      : n.test_sent_at ? '<p class="hint">测试通知已发出，点一下通知里的按钮试试。</p>' : "";
+    const recent = (n.recent || []).slice(0, 6).map((r) => `<li><time>${esc(fmtTime(r.at))}</time><span>${esc(short(r.title, 30))}${r.buttons === false ? "（无按钮）" : ""}</span></li>`).join("") || '<li><time></time><span>还没有发过看板通知。</span></li>';
+    const q = n.quiet_hours || {};
+    return `<section class="notify panel"><h2>通知</h2><p class="hint">只为「先做」里的事发通知（同一件 12 小时内不重复），另外每天最多提醒一件「可能忘了」的重要事。你在通知里的每次点击和回复都会成为反馈。</p>${status}
+      <div class="notify-row"><label class="switch"><input type="checkbox" id="notify-enabled" ${n.enabled !== false ? "checked" : ""}> 开启看板通知</label>
+      <label>安静时段 <input type="time" id="quiet-start" value="${esc(q.start || "22:00")}"> – <input type="time" id="quiet-end" value="${esc(q.end || "09:00")}"></label>
+      <button type="button" class="ghost" data-notify-save>保存</button><button type="button" class="primary" data-notify-test>发一条测试通知</button></div>${test}
+      <h3>最近发出的</h3><ol class="log">${recent}</ol></section>`;
+  }
   function settingsView() {
-    return `<div class="settings"><header class="page-head"><h1>设置</h1><p>选一个模型供应商：agent 用它整理线索、判断项目阶段。</p></header><div id="dialog-content">${state.providers ? window.GTDProviders.section(state.providers) : "<p>正在读取…</p>"}</div><p class="hint">Finder 标签、Codex 模型等其他设置在 <a href="/classic">经典工作台</a>。</p></div>`;
+    return `<div class="settings"><header class="page-head"><h1>设置</h1><p>通知怎么打扰你，以及 agent 用哪个模型。</p></header>${notifySection()}<div id="dialog-content">${state.providers ? window.GTDProviders.section(state.providers) : "<p>正在读取…</p>"}</div><p class="hint">Finder 标签、Codex 模型等其他设置在 <a href="/classic">经典工作台</a>。</p></div>`;
   }
 
   function freshness() {
@@ -145,7 +166,7 @@
     try {
       if (view === "board") await loadBoard();
       if (view === "memory") { state.memory = await api("/api/memory"); render(); }
-      if (view === "settings") { state.providers = await window.GTDProviders.load(); render(); }
+      if (view === "settings") { [state.providers, state.notify] = await Promise.all([window.GTDProviders.load(), api("/api/notify")]); render(); }
     } catch (error) { toast(error.message, { error: true }); }
   }
 
@@ -217,6 +238,24 @@
       return;
     }
     if (t.hasAttribute("data-save-project")) return saveProject(t.closest("tr"));
+    if (t.hasAttribute("data-notify-save")) {
+      try { state.notify = await api("/api/notify/settings", { enabled: $("#notify-enabled").checked, quiet_start: $("#quiet-start").value, quiet_end: $("#quiet-end").value }); render(); toast("通知设置已保存"); } catch (error) { toast(error.message, { error: true }); }
+      return;
+    }
+    if (t.hasAttribute("data-notify-test")) {
+      try {
+        state.notify = await api("/api/notify/test", {}); render();
+        toast(state.notify.channel === "native" ? "测试通知已发出" : "已发出无按钮的通知；请允许系统通知以使用按钮", { error: state.notify.channel !== "native" });
+        clearInterval(state.notifyPoll);
+        const until = Date.now() + 120000;   // watch for the response for two minutes
+        state.notifyPoll = setInterval(async () => {
+          if (state.view !== "settings" || Date.now() > until) return clearInterval(state.notifyPoll);
+          const value = await api("/api/notify").catch(() => null);
+          if (value) { state.notify = value; if (value.test_response) { clearInterval(state.notifyPoll); render(); toast("收到你在通知里的回应了"); } }
+        }, 3000);
+      } catch (error) { toast(error.message, { error: true }); }
+      return;
+    }
   });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && state.menuFor) { const id = state.menuFor; closeMenu(); document.querySelector(`[data-menu="${CSS.escape(id)}"]`)?.focus(); }

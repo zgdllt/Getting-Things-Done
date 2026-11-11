@@ -222,3 +222,12 @@ main { padding: 30px 40px 60px; min-width: 0; outline: none; }
   .board-head { flex-direction: column; align-items: flex-start; }
 }
 .drop-only { min-height: 52px; border: 1px dashed var(--rule); border-radius: 8px; }
+
+/* notifications */
+.notify { margin-bottom: 26px; }
+.notify h3 { margin: 16px 0 6px; font: 600 14px var(--serif); }
+.notify .ok { color: var(--green); } .notify .warn { color: var(--ochre); }
+.notify-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 12px 0; font-size: 13px; }
+.notify-row input[type=time] { padding: 3px 6px; border: 1px solid var(--rule); border-radius: 6px; background: #fdfcf6; }
+.switch { display: inline-flex; align-items: center; gap: 6px; }
+.switch input { accent-color: var(--green); }

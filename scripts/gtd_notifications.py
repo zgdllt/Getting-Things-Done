@@ -67,8 +67,12 @@ def is_running(app):
                           capture_output=True).returncode == 0
 
 
-def deliver(state, title, body, identifier=None):
+def deliver(state, title, body, identifier=None, extra=None):
+    """Queue one native notification. `extra` adds string fields (category, item_id, subtitle)
+    and may name the workbench `view` a click opens."""
     from gtd_dashboard import open_url
+    extra = dict(extra or {})
+    view = extra.pop("view", "inbox")
     request = receipt = claimed = None
     def acknowledged():
         if not receipt or not receipt.exists():
@@ -92,8 +96,8 @@ def deliver(state, title, body, identifier=None):
             gtd.atomic_json(state.base / "notification-status.json", result)
             return result
         if not request.exists() and not claimed.exists():
-            gtd.atomic_json(request, {"id": key, "title": title, "body": body,
-                                     "url": open_url(state.base, "inbox")})
+            gtd.atomic_json(request, {**{k: str(v) for k, v in extra.items()}, "id": key, "title": title,
+                                     "body": body, "url": open_url(state.base, view)})
         if not is_running(app):
             subprocess.run(["/usr/bin/open", "-g", "-a", str(app), "--args", "--background", "--state", str(state.base)],
                            check=True, capture_output=True, timeout=10)

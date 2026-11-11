@@ -23,6 +23,17 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         center.delegate = self
+        // Board cards: four one-tap answers plus a reply box; every response becomes feedback.
+        let reply = UNTextInputNotificationAction(identifier: "reply", title: "回复…", options: [],
+                                                  textInputButtonTitle: "发送",
+                                                  textInputPlaceholder: "比如：已交了 / 改到周五 / 等老师回复")
+        let actions = [UNNotificationAction(identifier: "start", title: "开始", options: []),
+                       UNNotificationAction(identifier: "done", title: "已完成", options: []),
+                       UNNotificationAction(identifier: "later", title: "稍后", options: []),
+                       UNNotificationAction(identifier: "not_important", title: "不重要", options: [.destructive]),
+                       reply]
+        center.setNotificationCategories([UNNotificationCategory(identifier: "board-card", actions: actions,
+                                                                 intentIdentifiers: [], options: [.customDismissAction])])
         let identity: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "bundle": Bundle.main.bundleURL.path]
         if let data = try? JSONSerialization.data(withJSONObject: identity) {
             try? data.write(to: root.appendingPathComponent("notification-app.json"), options: .atomic)
@@ -309,9 +320,15 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
             }
             let content = UNMutableNotificationContent()
             content.title = title
-            content.subtitle = "待你确认 · 点击打开工作台"
+            content.subtitle = value["subtitle"] ?? "待你确认 · 点击打开工作台"
             content.body = body
-            content.userInfo = ["open_url": url]
+            var info: [String: String] = ["open_url": url, "request_id": id]
+            if let category = value["category"], let item = value["item_id"] {
+                content.categoryIdentifier = category
+                content.threadIdentifier = "wenshu.board"
+                info["item_id"] = item
+            }
+            content.userInfo = info
             center.add(UNNotificationRequest(identifier: id, content: content, trigger: nil)) { error in
                 DispatchQueue.main.async { self.finish(claimed, id: id, error: error?.localizedDescription) }
             }
@@ -334,9 +351,35 @@ final class Notifications: NSObject, NSApplicationDelegate, UNUserNotificationCe
         completionHandler([.banner, .list])
     }
 
+    /// Hand a board-card response to the background job as a private file; Python turns it into feedback.
+    func recordResponse(_ response: UNNotificationResponse) {
+        let info = response.notification.request.content.userInfo
+        guard let item = info["item_id"] as? String else { return }
+        let action: String
+        switch response.actionIdentifier {
+        case UNNotificationDefaultActionIdentifier: action = "open"
+        case UNNotificationDismissActionIdentifier: action = "dismiss"
+        default: action = response.actionIdentifier
+        }
+        let text = (response as? UNTextInputNotificationResponse)?.userText ?? ""
+        let id = (info["request_id"] as? String) ?? response.notification.request.identifier
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let value: [String: String] = ["id": id, "item_id": item, "action": action, "text": text, "at": stamp]
+        let folder = root.appendingPathComponent("notifications", isDirectory: true)
+        let file = folder.appendingPathComponent(id + "." + String(Int(Date().timeIntervalSince1970 * 1000)) + ".response.json")
+        if let data = try? JSONSerialization.data(withJSONObject: value) {
+            try? data.write(to: file, options: .atomic)
+            _ = chmod(file.path, 0o600)
+        }
+    }
+
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
-        if response.actionIdentifier != UNNotificationDismissActionIdentifier,
+        recordResponse(response)
+        // Only a click on the notification itself opens the window; the buttons answer in place.
+        let opens = response.actionIdentifier == UNNotificationDefaultActionIdentifier
+            || response.notification.request.content.categoryIdentifier.isEmpty
+        if opens, response.actionIdentifier != UNNotificationDismissActionIdentifier,
            let value = response.notification.request.content.userInfo["open_url"] as? String,
            let url = URL(string: value), url.scheme == "http", url.host == "127.0.0.1" {
             DispatchQueue.main.async { self.showWindow(url: url) }

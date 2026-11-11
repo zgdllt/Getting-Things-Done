@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 
 import gtd
 import gtd_board
+import gtd_board_notify
 import gtd_memory
 
 logger = logging.getLogger(__name__)
@@ -165,17 +166,36 @@ def save_project(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
     return memory(state)
 
 
+def notify_settings(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Turn board notifications on/off and set quiet hours (HH:MM, equal times disable them)."""
+    with state.lock("configuration.lock", blocking=True):
+        config = state.config()
+        if "enabled" in data:
+            config["board_notifications"] = bool(data["enabled"])
+        if "quiet_start" in data or "quiet_end" in data:
+            start, end = str(data.get("quiet_start") or "22:00"), str(data.get("quiet_end") or "09:00")
+            dt.time.fromisoformat(start), dt.time.fromisoformat(end)
+            config["quiet_hours"] = {"start": start, "end": end}
+        gtd.atomic_json(state.base / "config.json", config)
+    return gtd_board_notify.summary(state)
+
+
 def get(state: gtd.State, route: str) -> Dict[str, Any] | None:
     if route == "/api/board":
         return board(state)
     if route == "/api/memory":
         return memory(state)
+    if route == "/api/notify":
+        gtd_board_notify.collect_responses(state)
+        return gtd_board_notify.summary(state)
     return None
 
 
 def post(state: gtd.State, route: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
     handlers = {"/api/board/feedback": feedback, "/api/board/undo": undo,
                 "/api/memory/profile": save_profile, "/api/memory/project": save_project,
-                "/api/board/refresh": lambda s, d: {**board(s), "refreshing": start_refresh(s, force=True)}}
+                "/api/board/refresh": lambda s, d: {**board(s), "refreshing": start_refresh(s, force=True)},
+                "/api/notify/test": lambda s, d: {**gtd_board_notify.send_test(s), **gtd_board_notify.summary(s)},
+                "/api/notify/settings": notify_settings}
     handler = handlers.get(route)
     return handler(state, data) if handler else None

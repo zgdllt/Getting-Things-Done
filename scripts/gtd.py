@@ -246,6 +246,18 @@ def project_event(event, path, offset):
 
 BATCH_CHARS = 60000
 LOCAL_POLL_SECONDS = 180
+NOTIFY_SECONDS = 600
+
+
+def board_notifications(state, config, send_now):
+    """Turn notification responses into feedback right away; send selected board cards when due."""
+    import gtd_board_notify  # builds on this module
+    try:
+        gtd_board_notify.collect_responses(state)
+        if send_now and state.config().get("board_notifications", True):  # re-read: the user may toggle it
+            gtd_board_notify.cycle(state)
+    except Exception as error:  # never let notifications stop history processing
+        gtd_board_notify.write_status(state, last_error=str(error)[:300], error_at=now())
 
 
 def chunk_records(records, limit=BATCH_CHARS):
@@ -708,11 +720,16 @@ def daemon(state):
         selector.register(watcher.stdout, selectors.EVENT_READ)
     poll_seconds = max(30, int(config.get("local_poll_seconds", LOCAL_POLL_SECONDS)))
     next_poll = 0.0
+    notify_seconds = max(60, int(config.get("notify_seconds", NOTIFY_SECONDS)))
+    next_notify = time.monotonic() + 30          # let the first collection settle before notifying
     dirty, last_run = True, 0.0
     retry_at, failures, needs_attention = None, 0, False
     retry_delays = [30, 120, 600]
     try:
         while watcher is None or watcher.poll() is None:
+            board_notifications(state, config, time.monotonic() >= next_notify)
+            if time.monotonic() >= next_notify:
+                next_notify = time.monotonic() + notify_seconds
             if watcher:
                 for key, _ in selector.select(timeout=1):
                     line = key.fileobj.readline()
