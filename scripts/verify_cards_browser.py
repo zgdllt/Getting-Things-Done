@@ -209,7 +209,7 @@ def run(artifacts, browser_executable=None):
                 browser = playwright.chromium.launch(**launch)
                 page = browser.new_page(viewport={"width": 1360, "height": 1000})
                 page.on("pageerror", lambda error: errors.append(str(error)))
-                page.goto(f"http://127.0.0.1:{server.server_port}/#access=cards-token")
+                page.goto(f"http://127.0.0.1:{server.server_port}/classic#access=cards-token")
                 page.wait_for_load_state("networkidle")
                 cards = page.locator("[data-task-deck]")
                 expect(cards).to_have_count(1)

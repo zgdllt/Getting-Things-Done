@@ -27,7 +27,7 @@ window.GTDProviders = (() => {
     return `<h3 class="settings-section-title">模型供应商</h3>
       <p>历史整理、答复整理与快捷选项都使用这里选中的供应商。可接入国产大模型官方接口、中转站，或通过 SSH 隧道使用自己部署的模型。</p>${external}
       <div class="provider-card ${codex ? "active" : ""}"><div class="provider-head"><strong>Codex</strong><span class="provider-badge">默认</span>${codex ? `<span class="provider-badge current">使用中</span>` : ""}</div>
-        <p>沿用 Codex 的登录与模型设置（见下方「模型服务」）。</p>
+        <p>沿用 Codex 的登录与模型设置。</p>
         <div class="provider-actions">${codex ? "" : `<button class="button primary" type="button" data-provider-action="use-codex">使用</button>`}</div></div>
       ${data.profiles.map(card).join("")}
       <button class="button" type="button" data-provider-action="add">＋ 添加供应商</button>`;

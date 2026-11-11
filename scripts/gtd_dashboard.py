@@ -24,6 +24,7 @@ import gtd
 import gtd_clarify
 import gtd_models
 import gtd_providers
+import gtd_board_api
 import gtd_options
 import gtd_sources
 import gtd_files
@@ -167,6 +168,9 @@ def prepare(state, data):
 
 
 def action(state, route, data):
+    handled = gtd_board_api.post(state, route, data)
+    if handled is not None:
+        return handled
     if route == "/api/files/register":
         if "recursive" in data:
             raise gtd_files.DeprecatedFilesProtocol("递归扫描接口已废弃，请更新 App；添加文件夹只整理文件夹本身")
@@ -338,7 +342,10 @@ class Handler(BaseHTTPRequestHandler):
         if not self.valid_host():
             return self.send(403, {"error": "不允许的访问来源"})
         route = self.path.split("?", 1)[0]
-        assets = {"/": ("index.html", "text/html; charset=utf-8"),
+        assets = {"/": ("board.html", "text/html; charset=utf-8"),
+                  "/classic": ("index.html", "text/html; charset=utf-8"),
+                  "/board.js": ("board.js", "text/javascript; charset=utf-8"),
+                  "/board.css": ("board.css", "text/css; charset=utf-8"),
                   "/app.js": ("app.js", "text/javascript; charset=utf-8"),
                   "/deck.js": ("deck.js", "text/javascript; charset=utf-8"),
                   "/files.js": ("files.js", "text/javascript; charset=utf-8"),
@@ -351,12 +358,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (WEB / path).read_bytes(), kind)
         if not self.authenticated():
             return self.send(401, {"error": "请从桌面「Getting Things Done」入口打开工作台"})
-        if route not in ("/api/state", "/api/models", "/api/files", "/api/providers"):
+        if route not in ("/api/state", "/api/models", "/api/files", "/api/providers", "/api/board", "/api/memory"):
             return self.send(404, {"error": "页面不存在"})
         state = gtd.State(self.server.base)
         try:
             query = {key: values[-1] for key, values in parse_qs(urlsplit(self.path).query).items()}
-            self.send(200, gtd_models.catalog(state) if route == "/api/models"
+            self.send(200, gtd_board_api.get(state, route) if route in ("/api/board", "/api/memory")
+                      else gtd_models.catalog(state) if route == "/api/models"
                       else gtd_providers.listing(state) if route == "/api/providers"
                       else gtd_files.snapshot(state, query) if route == "/api/files" else dashboard_state(state))
         except ValueError as error:

@@ -70,7 +70,7 @@ def run(artifacts=None, browser_executable=None):
                 browser=p.chromium.launch(**launch)
                 context=browser.new_context(viewport={"width":1440,"height":1020},permissions=["clipboard-read","clipboard-write"])
                 page=context.new_page();page.on('pageerror',lambda error:errors.append(str(error)))
-                page.goto(f"http://127.0.0.1:{server.server_port}/#access=fixture-token")
+                page.goto(f"http://127.0.0.1:{server.server_port}/classic#access=fixture-token")
                 page.wait_for_load_state('networkidle');page.get_by_role('heading',name='今天，先做哪一件？').wait_for()
                 assert 'access=' not in page.url
                 page.screenshot(path=str(artifacts/'workbench-fixture-today.png'),full_page=True)

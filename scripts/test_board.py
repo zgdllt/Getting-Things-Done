@@ -331,7 +331,7 @@ class BoardTests(BoardFixture):
         self.assertEqual(board.preferences(self.state)["weights"]["alpha"], -0.5)
         rows = [json.loads(line) for line in (self.state.base / "memory/feedback.jsonl").read_text().splitlines()]
         self.assertEqual(len(rows), 20)
-        self.assertEqual(set(rows[0]), {"timestamp", "item_id", "project", "action", "value", "quadrant", "importance", "urgency"})
+        self.assertEqual(set(rows[0]), {"timestamp", "item_id", "title", "project", "action", "value", "quadrant", "importance", "urgency"})
         self.assertEqual(rows[0]["quadrant"], 2)
 
     def test_invalid_feedback_does_not_log(self) -> None:

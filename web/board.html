@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>文枢</title>
+  <link rel="icon" href="/icon.svg">
+  <link rel="stylesheet" href="/board.css">
+  <script src="/providers.js" defer></script>
+  <script src="/board.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand">
+        <span class="seal" aria-hidden="true">枢</span>
+        <div><strong>文枢</strong><small>替你记着没做完的事</small></div>
+      </div>
+      <nav aria-label="主导航">
+        <button type="button" class="nav" data-view="board"><span aria-hidden="true">✛</span>看板</button>
+        <button type="button" class="nav" data-view="memory"><span aria-hidden="true">◎</span>记忆</button>
+        <button type="button" class="nav" data-view="settings"><span aria-hidden="true">⚙</span>设置</button>
+      </nav>
+      <div class="rail-foot">
+        <p id="freshness" class="freshness">正在连接…</p>
+        <a href="/classic" class="classic-link">经典工作台 ↗</a>
+      </div>
+    </aside>
+    <main id="main" tabindex="-1" aria-live="polite"><div class="loading"><span class="seal big" aria-hidden="true">枢</span><p>正在读取看板…</p></div></main>
+  </div>
+  <div id="menu" class="menu" role="menu" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>

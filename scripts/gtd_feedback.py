@@ -95,7 +95,7 @@ def record_feedback(state: gtd.State, item_id: str, action: str, value: Any = No
         set_status(state, item, status, prefs, now)
         prefs["snoozed"].pop(item_id, None)
     gtd.atomic_json(state.base / "memory/preferences.json", prefs)
-    event = {"timestamp": now.isoformat(), "item_id": item_id, "project": item["project"],
+    event = {"timestamp": now.isoformat(), "item_id": item_id, "title": item["title"], "project": item["project"],
              "action": action, "value": value, "quadrant": item["quadrant"],
              "importance": item["importance"], "urgency": item["urgency"]}
     path = gtd_memory.folder(state) / "feedback.jsonl"

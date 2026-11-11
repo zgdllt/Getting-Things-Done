@@ -53,7 +53,7 @@ def run(artifacts=None, browser_executable=None):
             browser = playwright.chromium.launch(**({"executable_path": browser_executable} if browser_executable else {}))
             page = browser.new_page(viewport={"width": 1240, "height": 900})
             page.on("pageerror", lambda error: errors.append(str(error)))
-            page.goto(f"http://127.0.0.1:{server.server_port}/#access=fixture-token&view=files")
+            page.goto(f"http://127.0.0.1:{server.server_port}/classic#access=fixture-token&view=files")
             expect(page.get_by_role("heading", name="从 Codex 项目开始整理。")).to_be_visible()
             origin=f"http://127.0.0.1:{server.server_port}"
             for route,payload in [("/api/files/scan",{}),
