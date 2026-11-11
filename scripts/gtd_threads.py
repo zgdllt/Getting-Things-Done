@@ -137,18 +137,21 @@ def match(project: str, table: Dict[str, Any]) -> List[str]:
 
 
 def rank(state: gtd.State, now: Optional[dt.datetime] = None, days: int = SCAN_DAYS,
-         inferred: Optional[Dict[str, Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+         inferred: Optional[Dict[str, Dict[str, Any]]] = None,
+         activity: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """Projects that look unfinished and forgotten, most worth a nudge first.
 
     User-confirmed stages (memory) decide. For other projects the inferred stage is only a
-    guess shown in a one-tap confirmation: a blind check against user labels found the model
+    guess shown in a one-tap confirmation. Supplying activity reuses an existing scan without
+    refreshing it. A blind check against user labels found the model
     confidently wrong (0.85-0.95) whenever the user's own judgment was not in the logs
     (agent "not met" vs user "good enough"; a decision pending only in the user's head)."""
     inferred = inferred or {}
     now = now or dt.datetime.now(dt.timezone.utc)
     config = state.config()
     _, roots = gtd_local.configured_sources(config)
-    activity = scan_activity(now, days, roots, state.base / "experiments" / "activity-cache.json")
+    if activity is None:
+        activity = scan_activity(now, days, roots, state.base / "experiments" / "activity-cache.json")
     table = decisions(state)
     declared = {norm(brief.get("title", "")) for brief in (config.get("project_briefs") or {}).values()}
     memory = gtd_memory.projects(state)

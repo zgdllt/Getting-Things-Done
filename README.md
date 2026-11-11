@@ -39,6 +39,29 @@ Observed activity is a clue. It does not automatically become a commitment, a de
 
 Notifications name the specific item and the question, and open the native app's clarification view. The app uses AppKit and the system WebKit engine. There is no bundled Chromium runtime, frontend framework, external font or CDN.
 
+## Four-quadrant board data layer
+
+The source also provides a deterministic, agent-maintained four-quadrant board data layer.
+It joins project activity/memory, open candidates and the saved Apple task/calendar snapshot;
+it does not call a model or change Apple records. This task adds no board UI or notification delivery.
+Use an explicit isolated state directory while trying it:
+
+```sh
+cd scripts
+python3 gtd_board.py --state /path/to/isolated-state build
+python3 gtd_board.py --state /path/to/isolated-state show
+python3 gtd_board.py --state /path/to/isolated-state feedback project:alpha move 2
+python3 gtd_board.py --state /path/to/isolated-state notifications
+```
+
+`build` writes private `board.json`; feedback maintains private preferences and an append-only
+evidence log. `notifications` previews eligible Q1 alerts and at most one ranked Q2 nudge.
+Call `mark_notified` only for successfully delivered previews when a delivery layer is added.
+Quiet hours default to local 22:00–09:00; configure `quiet_hours` as
+`{"start":"22:00","end":"09:00"}` in the state configuration, or `false` to disable them.
+See [board decisions and validation](references/verification.md#board-data-layer) for the exact
+date, feedback, notification receipt and test semantics.
+
 ## Settings and immediate replies
 
 In the current source version, **Settings** sits at the bottom left of the sidebar. It contains the task display style, model and reasoning selectors, background/notification status and system-app permission status. GTD defaults to **`gpt-6.1-terra` / `high`**. Choose from the local Codex model catalog or enter another model ID supported by your provider. Settings affect the next GTD model call and preserve your existing provider, login and ordinary Codex chat defaults.

@@ -72,3 +72,72 @@ An additional temporary-workspace check covered a file arriving during inference
 - The app is locally compiled/ad-hoc signed. There is no notarized binary distribution.
 - Computer History must be enabled by its user. A loaded GTD subscriber does not prove the recorder is running or that every event has been processed.
 - CLI feature flags and the local event-file schema may evolve. Background extraction retains failed batches and makes persistent failures visible.
+## Board data layer
+
+Implemented in `gtd_board.py`, `gtd_feedback.py` and `gtd_board_notifications.py`, with synthetic
+tests in `test_board.py` and fixtures in `test_board_support.py`. `install.py` includes these
+files and their existing thread/memory dependencies. The board has no UI or delivery integration.
+
+Decisions filling gaps in the board brief:
+
+- Project IDs use `project:<gtd_threads.norm(name)>`, keeping identity stable across spelling
+  punctuation/case changes. Memory spelling is retained for display and memory updates.
+  Joins use normalized names; declared priorities and past candidate decisions reuse `match`.
+  Explicit snapshot project fields are honored; reminder project context can also come from
+  a linked candidate's `target_id`. Titles are never guessed into project associations.
+- Activity importance is `min(0.2, 0.2 * unique_active_days / SCAN_DAYS)` (currently 14 days).
+  Accepted and resolved candidates count as kept, matching existing `decisions`. Projects/tasks
+  have no base importance; reminders/events start at 0.5. Scores are rounded to six decimals.
+  Each card's `updated_at` is its board generation time; persisted JSON count keys are strings.
+- Confirmed memory stages decide inclusion and stage-based importance. Inference is descriptive:
+  existing `left_off`/`remaining` are reused even when the inference cache is older than 12 hours;
+  it is never refreshed or used to silently finish a project. Memory context takes precedence.
+  An inference-only name without activity or memory does not create a card.
+- The host's local timezone defines days, date-only deadlines and quiet hours. Naive datetimes
+  are local. Date-only deadlines expire at the end of their local date; datetime deadlines are
+  exact instants. Deadline windows and the calendar lookahead are elapsed 24/72/168 hours,
+  including their upper boundaries. Calendar cards start at or after now; ongoing events are
+  outside the lookahead. `paused` with no valid `next_at` still has no deadline.
+- Native reminders accept the existing `due: {value, all_day}` shape as well as ISO strings.
+  Candidate links to any reminder in the snapshot suppress that candidate, including completed
+  or undated reminders; reminders themselves still obey the brief's incomplete-and-dated filter.
+- Pins override the final quadrant, including notification eligibility. A move within the same
+  importance half does not train a weight. Pins persist while hidden/temporarily absent and
+  expire when a rebuilt card's due/status fingerprint differs. Terminal project feedback also
+  removes its pin because its status has changed to a stage outside the visible board.
+- `doing`/notification `start` counts as 24 hours of explicit user activity for any card. Project
+  memory changes end this override early; otherwise the agent resumes source-based status after
+  24 hours. `blocked` and `tool` apply only to projects. Project feedback preserves notes, plans
+  and related context. Invalid or unknown feedback raises `ValueError` without a success log.
+- Completing any non-project card hides it indefinitely in this local board, preserving the
+  candidate and all Apple data. `not_important` hides only the selected card for 30 days, while
+  changing its project's weight when available. Snoozing affects notifications for four hours,
+  keeping the card visible; the independent 12-hour notification dedupe can last longer.
+- Selection is a dry run: `notified.json` stores preview metadata and card evidence, but only
+  `mark_notified` consumes delivery windows/day quotas. Repeated previews do not count as sends.
+  Q1 cards and Q2 project nudges both respect 12-hour receipt dedupe; Q3/Q4 never notify. Q2 uses
+  existing `rank` order and `phrase`; only one Q2 receipt per local delivery day is permitted,
+  including outstanding previews. A batch with multiple Q2 receipts is rejected before writes;
+  repeated IDs within one batch are deduplicated. Marking requires a previous selection.
+- Quiet intervals include their start and exclude their end, and may cross midnight. Equal
+  endpoints, `false`, or `null` disable quiet hours. Configured times use ISO `HH:MM` strings.
+  Bodies have at most two lines, at most 70 characters each, without the old inline action list.
+  Previously previewed notification cards remain available for feedback after leaving the board
+  (for example, once a calendar event starts); their saved scoring evidence is logged.
+- The CLI requires `--state` explicitly to avoid accidental writes to the live state. Each command
+  builds a current board; feedback and notification ranking use the activity cache without refresh.
+  The optional `rank(activity=...)` parameter preserves existing callers' refresh behavior.
+
+Validation on 2026-11-11 used Python 3.15, `-B`, synthetic state only, with `TMPDIR` inside this
+worktree's ignored `.test-artifacts/`. All 25 board tests and 6 existing thread tests passed.
+All new modules are at most 400 lines; AST checks verified every function has annotations and a
+docstring. Tests cover artifact mode 0600, all CLI commands, native snapshot shapes, cache-only
+execution, feedback effects, pin expiry, local-day/quiet boundaries, and notification receipts.
+
+The exact requested full suite ran 146 tests: 144 passed and two existing integration tests errored
+under the managed sandbox. `test_private_http_auth_origin_and_new_token_replace_old_cookie`
+cannot bind `127.0.0.1` (`PermissionError: Operation not permitted`).
+`test_stop_kills_model_descendants_after_leader_exits` times out because its worker identity check
+uses `/bin/ps`, which this sandbox prohibits. Those source/tests were not changed or skipped, and
+the complete suite is not claimed as passing. No live-state build, model call, Apple write, UI/Swift
+change, notification delivery or commit was performed.
