@@ -37,7 +37,7 @@ SECRET_PATTERNS = [
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{20,}"),                           # bearer tokens
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
 ]
-INJECTED = re.compile(r"<(system-reminder|ide_selection|ide_opened_file|command-[a-z-]+|local-command-[a-z-]+)>"
+INJECTED = re.compile(r"<(system-reminder|ide_selection|ide_opened_file|command-[a-z-]+|local-command-[a-z-]+|subagent_notification|task-notification)>"
                       r"[\s\S]*?</\1>")
 CODEX_CONTEXT_PREFIXES = ("<environment_context>", "<user_instructions>", "# AGENTS.md", "<permissions",
                           "<turn_aborted>", "<user_shell_command>")
@@ -59,9 +59,11 @@ def _ts(value: Any) -> Optional[dt.datetime]:
     return gtd_sources.parse_timestamp(value) if value else None
 
 
-def _record(key: str, timestamp: str, kind: str, source: str, app: str, title: str, text: str) -> Dict[str, Any]:
+def _record(key: str, timestamp: str, kind: str, source: str, app: str, title: str, text: str,
+            path: str = "") -> Dict[str, Any]:
+    window = {"title": title, "path": path} if path else {"title": title}
     return {"event_key": key, "timestamp": timestamp, "kind": kind, "source_type": source,
-            "app": {"name": app}, "window": {"title": title}, "text": text, "part": 1, "parts": 1}
+            "app": {"name": app}, "window": window, "text": text, "part": 1, "parts": 1}
 
 
 def _files(root: Path, pattern: str, start: dt.datetime) -> List[Path]:
@@ -98,12 +100,12 @@ def _texts(content: Any, kinds: Iterable[str]) -> str:
 def codex_events(start: dt.datetime, end: dt.datetime, root: Path = CODEX_ROOT) -> List[Dict[str, Any]]:
     events: List[Dict[str, Any]] = []
     for path in _files(root, "**/*.jsonl", start):
-        project = ""
+        project, cwd = "", ""
         for offset, row in _lines(path, (b'"session_meta"', b'"turn_context"', b'"role":"user"',
                                          b'"final_answer"')):
             payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
             if row.get("type") in ("session_meta", "turn_context") and payload.get("cwd"):
-                project = Path(payload["cwd"]).name
+                project, cwd = Path(payload["cwd"]).name, payload["cwd"]
                 continue
             if row.get("type") != "response_item" or payload.get("type") != "message":
                 continue
@@ -123,7 +125,7 @@ def codex_events(start: dt.datetime, end: dt.datetime, root: Path = CODEX_ROOT) 
             text = clean(text)
             if text:
                 events.append(_record(f"{path}:{offset}", row["timestamp"], kind, "local_codex_session",
-                                      "Codex", project, text))
+                                      "Codex", project, text, cwd))
     return events
 
 
@@ -145,7 +147,7 @@ def claude_events(start: dt.datetime, end: dt.datetime, root: Path = CLAUDE_ROOT
             if text:
                 project = Path(row.get("cwd") or "").name
                 events.append(_record(f"{path}:{offset}", row["timestamp"], kind, "local_claude_session",
-                                      "Claude Code", project, text))
+                                      "Claude Code", project, text, row.get("cwd") or ""))
     return events
 
 
@@ -170,7 +172,7 @@ def git_events(start: dt.datetime, end: dt.datetime, roots: Iterable[Path] = DEF
             parts = line.split("\x1f")
             if len(parts) == 3:
                 events.append(_record(f"git:{repo.name}:{parts[0][:12]}", parts[1], "git.commit",
-                                      "local_git_commit", "git", repo.name, clean(parts[2])))
+                                      "local_git_commit", "git", repo.name, clean(parts[2]), str(repo)))
     return events
 
 
