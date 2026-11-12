@@ -53,7 +53,9 @@ def setup(state: gtd.State) -> dict[str, Any]:
             created["list"] = gtd.native(state, "apply", {"action": "create_list", "op_id": "owned-list",
                                                           "title": TITLE})["item"]
         if created:
-            with state.lock():
+            # Same lock the dashboard uses for config edits; the inbox processor lock is held
+            # by the daemon most of the time.
+            with state.lock("configuration.lock", blocking=True):
                 config = state.config()
                 if "calendar" in created:
                     config["owned_calendar_id"] = created["calendar"]["id"]
