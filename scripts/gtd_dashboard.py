@@ -358,12 +358,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (WEB / path).read_bytes(), kind)
         if not self.authenticated():
             return self.send(401, {"error": "请从桌面「Getting Things Done」入口打开工作台"})
-        if route not in ("/api/state", "/api/models", "/api/files", "/api/providers", "/api/board", "/api/memory", "/api/notify"):
+        board_routes = ("/api/board", "/api/memory", "/api/notify", "/api/settings/owned-calendar")
+        if route not in ("/api/state", "/api/models", "/api/files", "/api/providers", *board_routes):
             return self.send(404, {"error": "页面不存在"})
         state = gtd.State(self.server.base)
         try:
             query = {key: values[-1] for key, values in parse_qs(urlsplit(self.path).query).items()}
-            self.send(200, gtd_board_api.get(state, route) if route in ("/api/board", "/api/memory", "/api/notify")
+            self.send(200, gtd_board_api.get(state, route) if route in board_routes
                       else gtd_models.catalog(state) if route == "/api/models"
                       else gtd_providers.listing(state) if route == "/api/providers"
                       else gtd_files.snapshot(state, query) if route == "/api/files" else dashboard_state(state))

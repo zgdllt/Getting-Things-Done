@@ -152,3 +152,23 @@ class OwnedTest(BoardFixture):
         items = {i["id"].split(":")[1]: i for i in gtd_board.build(self.state, TODAY, refresh_activity=False)["items"]
                  if i["kind"] == "event"}
         self.assertEqual((items["e1"]["owned"], items["e2"]["owned"]), (True, False))
+
+    def test_status_route_is_served_by_the_dashboard(self) -> None:
+        """GET /api/settings/owned-calendar reaches the board API through the real HTTP server."""
+        import http.client
+        import threading
+        import gtd_dashboard
+        self.own()
+        self.snapshot()
+        server = gtd_dashboard.Server(("127.0.0.1", 0), self.state.base, "t0ken")
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        connection = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
+        connection.request("GET", "/api/settings/owned-calendar",
+                           headers={"X-GTD-Token": "t0ken", "Host": f"127.0.0.1:{server.server_address[1]}"})
+        response = connection.getresponse()
+        body = __import__("json").loads(response.read())
+        connection.close()
+        self.assertEqual((response.status, body["ready"], body["calendar"]["title"]), (200, True, "文枢"))
