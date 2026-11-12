@@ -15,6 +15,7 @@ PAYLOAD = (
     "references/file-organization.md", "references/files-extractor.md", "references/files.schema.json",
     "scripts/gtd.py", "scripts/gtd_native.swift", "scripts/gtd_dashboard.py",
     "scripts/gtd_board.py", "scripts/gtd_board_api.py", "scripts/gtd_board_notify.py", "scripts/gtd_board_merge.py", "scripts/gtd_feedback.py", "scripts/gtd_board_notifications.py",
+    "scripts/gtd_reply.py", "scripts/gtd_proposals.py", "scripts/gtd_inference.py", "scripts/test_reply.py",
     "scripts/test_board.py", "scripts/test_board_support.py", "scripts/test_board_merge.py", "scripts/test_board_notifications.py",
     "scripts/gtd_threads.py", "scripts/gtd_memory.py", "scripts/test_threads.py",
     "scripts/gtd_models.py", "scripts/gtd_sources.py", "scripts/gtd_clarify.py", "scripts/gtd_options.py",

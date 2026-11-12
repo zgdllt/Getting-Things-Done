@@ -12,6 +12,7 @@ import argparse
 import collections
 import datetime as dt
 import json
+import logging
 import os
 import re
 import statistics
@@ -362,12 +363,22 @@ def report(state: gtd.State, now: Optional[dt.datetime] = None) -> Tuple[Path, L
 
 
 def main() -> None:
+    """Run a report, evaluation, or just the profile-aware cached inference worker."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--state", default=str(gtd.DEFAULT_STATE))
     parser.add_argument("--report", action="store_true", help="write the private Markdown report")
     parser.add_argument("--evaluate", action="store_true", help="blind stage check against the user's labels")
+    parser.add_argument("--infer", action="store_true", help="run only cached inference with the profile")
     args = parser.parse_args()
     state = gtd.State(args.state)
+    if args.infer:
+        import gtd_inference
+        try:
+            result = gtd_inference.run(state)
+            logging.getLogger(__name__).info("Stage inference: %s", result)
+        finally:
+            state.db.close()
+        return
     if args.evaluate:
         result = evaluate(state)
         path = state.base / "experiments" / f"stage-eval-{dt.date.today().isoformat()}.json"

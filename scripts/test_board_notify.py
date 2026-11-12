@@ -86,7 +86,8 @@ class NotifyTest(unittest.TestCase):
         self.respond(item, "dismiss")
         self.respond("reminder:gone", "later")                                   # left the board: logged, no crash
         log = [json.loads(line) for line in (self.state.base / "memory/feedback.jsonl").read_text().splitlines()]
-        self.assertEqual([(e["action"], e.get("value")) for e in log][:2], [("reply", "改到周五交"), ("dismiss", None)])
+        self.assertEqual([(e["action"], e.get("value")) for e in log][:3],
+                         [("reply", "改到周五交"), ("reply_interpreted", None), ("dismiss", None)])
         self.assertEqual(log[0]["title"], "交报告")
         self.assertIn("error", log[-1])
         self.assertFalse(list((self.state.base / "notifications").glob("*.response.json")))

@@ -249,9 +249,14 @@ LOCAL_POLL_SECONDS = 180
 NOTIFY_SECONDS = 600
 
 
-def board_notifications(state, config, send_now):
+def board_notifications(state: State, config: dict, send_now: bool) -> None:
     """Turn notification responses into feedback right away; send selected board cards when due."""
     import gtd_board_notify  # builds on this module
+    import gtd_inference
+    try:
+        gtd_inference.start(state)
+    except Exception as error:
+        gtd_board_notify.write_status(state, inference_error=str(error)[:300])
     try:
         gtd_board_notify.collect_responses(state)
         if send_now and state.config().get("board_notifications", True):  # re-read: the user may toggle it
@@ -636,7 +641,9 @@ def apply_plan(state, path):
     return {"ok": True, "receipts": receipts}
 
 
-def capture(state, title, bucket="inbox", project=""):
+def capture(state: State, title: str, bucket: str = "inbox", project: str = "",
+            suggested_due: str | None = None) -> dict:
+    """Capture a local candidate, optionally retaining a user-proposed due date."""
     if not title.strip():
         raise ValueError("Capture text must not be empty")
     key = "manual:" + uuid.uuid4().hex
@@ -644,7 +651,7 @@ def capture(state, title, bucket="inbox", project=""):
                  "app": {"name": "Codex"}, "window": {}, "text": title}]
     with state.db:
         state.db.execute("INSERT INTO candidates VALUES(?,?,?,?,?,?,?,?,?,?)",
-            (key, title, bucket, project, "", encode(evidence), "inbox", "", now(), now()))
+            (key, title, bucket, project, suggested_due or "", encode(evidence), "inbox", "", now(), now()))
     return {"ok": True, "candidate_key": key}
 
 

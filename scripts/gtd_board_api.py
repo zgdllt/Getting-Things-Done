@@ -19,7 +19,9 @@ from typing import Any, Dict, List
 import gtd
 import gtd_board
 import gtd_board_notify
+import gtd_inference
 import gtd_memory
+import gtd_proposals
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ PROFILE_LIMIT = 20000
 SNAPSHOT_FILES = ("memory/preferences.json", "memory/projects.json")
 CARD_FIELDS = ("id", "kind", "title", "project", "status", "due", "due_source", "importance",
                "importance_reasons", "urgency", "urgency_reasons", "quadrant", "pinned", "left_off",
-               "remaining", "updated_at", "parent", "top_level", "children", "children_count", "merged_ids")
+               "remaining", "updated_at", "parent", "top_level", "children", "children_count", "merged_ids", "notes", "proposals")
 
 
 def now() -> dt.datetime:
@@ -139,8 +141,16 @@ def recent_feedback(state: gtd.State, limit: int = 30) -> List[Dict[str, Any]]:
 
 
 def memory(state: gtd.State) -> Dict[str, Any]:
+    """Expose profile, confirmed stages, feedback and the last profile inference run."""
     return {"ok": True, "profile": gtd_memory.profile(state), "projects": gtd_memory.projects(state),
-            "stages": list(gtd_memory.STAGES), "feedback": recent_feedback(state)}
+            "stages": list(gtd_memory.STAGES), "feedback": recent_feedback(state),
+            "inference_status": gtd_inference.status(state)}
+
+
+def proposal(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply an explicit proposal decision and return the rebuilt board."""
+    result = gtd_proposals.decide(state, data.get("id"), data.get("accept"), now())
+    return {**board(state), **result}
 
 
 def save_profile(state: gtd.State, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -193,6 +203,7 @@ def get(state: gtd.State, route: str) -> Dict[str, Any] | None:
 
 def post(state: gtd.State, route: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
     handlers = {"/api/board/feedback": feedback, "/api/board/undo": undo,
+                "/api/board/proposal": proposal,
                 "/api/memory/profile": save_profile, "/api/memory/project": save_project,
                 "/api/board/refresh": lambda s, d: {**board(s), "refreshing": start_refresh(s, force=True)},
                 "/api/notify/test": lambda s, d: {**gtd_board_notify.send_test(s), **gtd_board_notify.summary(s)},

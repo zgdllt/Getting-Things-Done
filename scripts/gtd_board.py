@@ -27,7 +27,9 @@ class BoardItem(TypedDict):
     project: str | None
     status: Literal["doing", "started", "todo"]
     due: str | None
-    due_source: Literal["reminder", "calendar", "candidate", "plan"] | None
+    due_source: Literal["reminder", "calendar", "candidate", "plan", "user"] | None
+    notes: list[dict[str, Any]]
+    proposals: list[dict[str, Any]]
     importance: float
     importance_reasons: list[str]
     urgency: float
@@ -80,7 +82,7 @@ def timestamp(value: Any) -> dt.datetime | None:
 def preferences(state: gtd.State) -> dict[str, Any]:
     """Load feedback state with empty defaults for each independently owned mapping."""
     value = read_json(state.base / "memory/preferences.json")
-    for key in ("weights", "pins", "hidden", "snoozed", "statuses"):
+    for key in ("weights", "pins", "hidden", "snoozed", "statuses", "notes", "due_overrides"):
         value.setdefault(key, {})
     return value
 
@@ -224,6 +226,8 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
         """Score one source card, apply local feedback, and expire changed pins."""
         project = gtd_threads.norm(project or "") or None
         context = context or contexts.get(project, {})
+        if identity in prefs["due_overrides"]:
+            due, source = prefs["due_overrides"][identity], "user"
         due = valid_due(due)
         inference, entry = context.get("inference", {}), context.get("memory", {})
         override = prefs["statuses"].get(identity)
@@ -283,7 +287,8 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
             continue
         context = contexts.get(gtd_threads.norm(row["project"] or ""), {})
         evidence = json.loads(row["evidence"] or "[]")
-        eligible = (valid_due(row["suggested_due"]) or row["state"] == "accepted" or (
+        eligible = (valid_due(prefs["due_overrides"].get("candidate:" + row["key"]) or row["suggested_due"])
+                    or row["state"] == "accepted" or (
             gtd_threads.norm(row["project"] or "") in projects and own_activity(context, now, 7)
             and recent_update(row["updated_at"], now)))
         if not eligible or (evidence and all(event.get("kind") == "agent.final_answer" for event in evidence)):
@@ -310,6 +315,8 @@ def build(state: gtd.State, now: dt.datetime, refresh_activity: bool = True) -> 
         gtd.atomic_json(state.base / "memory/preferences.json", prefs)
     items = [item for item in items if not suppressed(prefs, item["id"], now)]
     merged = gtd_board_merge.merge(items, contexts)
+    from gtd_proposals import enrich
+    enrich(state, merged, prefs)
     merged_count = len(items) - len(merged)
     items = merged
     items.sort(key=lambda item: (item["quadrant"], -item["urgency"], -item["importance"],

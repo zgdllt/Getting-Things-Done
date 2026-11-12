@@ -287,3 +287,98 @@ These counts describe this later snapshot/local date. The temporary state was de
 the count-only report is in ignored `.test-artifacts/board-tuning2-smoke.json`.
 No live-state write, model call, Apple write, notification delivery, UI change or
 commit was performed.
+
+## Reply understanding and daily inference
+
+Implemented reply interpretation in `gtd_reply.py`, pending decisions in
+`gtd_proposals.py`, and detached profile-aware inference in `gtd_inference.py`.
+Notification collection, board JSON, board/memory APIs, the thread CLI, daemon and
+installer are wired to these modules. `web/` was not edited for this task; a concurrent
+`web/board.js` change was observed and preserved. Work used the provided checkout
+at `/Users/limh24/.codex/worktrees/gtd-nudges`, verified as `feature/nudges` at `32a9bc0`.
+
+Decisions where the brief did not specify behavior:
+
+- Interpretation uses the configured provider once, with a 30-second timeout and
+  no retries. Missing/invalid provider configuration, provider failures and malformed
+  completions preserve the original reply as a note. Unknown cards also become notes
+  without a model call. Current cards resolve merged aliases; previous-board and
+  notification evidence supply context for cards that have since disappeared.
+- The Chinese system prompt treats card/reply text as untrusted data. Input includes
+  local ISO now (with UTC offset), `TZ` when set or the local timezone name otherwise,
+  and the confirmed project stage joined by normalized project name. Bare weekday
+  expressions mean today or the next such weekday; next-week expressions use the
+  next calendar week. Date grounding is the model prompt's responsibility; schema
+  validation rejects impossible dates and any noncanonical date-only output.
+- The five output fields are required, with no extras except the provider transport's
+  `_usage`, which is discarded. Summaries contain 1–30 stored Unicode characters and
+  cannot be blank. Optional strings must be nonblank or null. A reschedule without
+  a date, or a new task without a title, falls back to a note.
+- Notes are chronological per-item lists retaining the latest five entries with
+  `timestamp`, original `text`, `summary` and nullable `waiting_on`. Cards expose the
+  newest three across their survivor and merged IDs, newest first. Non-project
+  blocked/tool replies and status changes that cannot apply to an expired card stay
+  notes; interpretation evidence retains the parsed intent and any application error.
+  The raw reply precedes interpretation evidence; status feedback can add its normal
+  evidence between them. Interpreted events retain the card title and store a model's
+  new-task title separately as `proposed_title`.
+- Pending proposals use `{"proposals": [...]}` with UUID-hex IDs, no expiry, and only
+  the brief's proposal fields. Interpretation neither captures candidates nor writes
+  native data. Cards/API expose every pending proposal matching any merged identity.
+  Collection uses a nonblocking lock so daemon and API requests cannot interpret the
+  same response file concurrently; a busy collector returns an empty result.
+- The proposal endpoint requires an actual JSON boolean `accept`. Unknown/already
+  decided IDs raise a validation error. Rejection changes no task data. Acceptance
+  removes a proposal only after its requested effect succeeds. New tasks become inbox
+  candidates with the exact proposed title/due and no guessed project association;
+  an absent due stays absent. Proposal decisions have no local undo token.
+- Acceptance resolves current merged aliases. A reminder change persists one private
+  `workbench-plans/reply-<proposal-id>.json` with that same operation ID and the
+  snapshot's `modified_at`. Missing versions stop before writing. Existing plans
+  always resume through `gtd.apply_plan`, even if a later snapshot dissolves a merge;
+  conflicts or uncertain receipts retain the proposal and stop blind retries. A
+  successful write attempts an authoritative snapshot refresh; failure returns
+  `refresh_pending: true` without misreporting the successful write as failed.
+- Non-reminder overrides store date strings by resolved item ID, retain normal pin
+  fingerprint expiry, and count as explicit dates for candidate board eligibility.
+  Hidden/expired source cards remain subject to normal visibility rules; the override
+  does not resurrect them or alter their underlying candidate/calendar/memory data.
+- The daemon checks the daily launcher even when notification sending is disabled.
+  Launch is allowed at local 09:00 or later, once per local start date, only with a
+  configured provider. A nonblocking launcher lock prevents overlapping processes;
+  the worker waits for the launcher's lock handoff. Failed attempts consume that
+  day's slot rather than retrying every loop. Explicit `--infer` is manual and bypasses
+  this automatic daily throttle while retaining worker serialization.
+- `memory/inference-status.json` records `started_at`, `finished_at`, the successful
+  fresh-project count `projects_inferred`, their names in `projects`, and nullable
+  `error`. Cache hits do not count as fresh inferences; partial model failures remain
+  visible as errors. Status is exposed as `inference_status` by `GET /api/memory`.
+  The worker uses existing `cached_inference` with its profile and 12-hour cache;
+  eligibility and one-time user-confirmation semantics of inferred stages are unchanged.
+- Production helpers and new tests are installed by `install.py`. New modules and
+  expanded board/thread/API modules remain below 400 lines. The pre-existing oversized
+  `gtd.py` receives only daemon wiring and the backwards-compatible optional
+  `capture(..., suggested_due=...)` extension, rather than an unrelated module split.
+
+Validation on 2026-11-11 used `/opt/homebrew/bin/python3.15 -B -m unittest`
+from `scripts/`, isolated synthetic state and a worktree-local `TMPDIR`. The focused
+`test_reply test_threads test_board_api test_board_notify` run passed all **50** tests.
+The full requested suite (`test_gtd test_local test_options test_providers
+test_workbench test_files test_clarification test_release test_threads test_board
+test_board_merge test_board_notifications test_board_api test_board_notify test_reply`)
+ran **243** tests: **241 passed**, with the same two sandbox integration errors:
+localhost binding is prohibited in the private HTTP test, and the descendant-stop
+test times out under prohibited `/bin/ps` inspection. Nothing was skipped. Full output
+is in ignored `.test-artifacts/brief-reply-tests.log`; focused output is in
+`.test-artifacts/brief-reply-focused.log`.
+
+Regression coverage includes each intent, relative-date provider context, strict JSON
+fallbacks, note limits, merged context, accept/reject for both proposal kinds,
+reminder versions/conflicts/uncertainty, changed merge membership after an uncertain
+write, snapshot-refresh failure, duplicate collectors, daily local-date gates and
+lock handoff, profile input, fresh-inference status and CLI/daemon separation.
+Independent read-only review found five issues, all corrected and covered by tests;
+follow-up review approved the changes. AST checks confirmed new-file syntax,
+annotations, docstrings, standard-library imports and line limits; `git diff --check`
+passed. No real model/network calls, Apple writes, live personal-state writes,
+notification deliveries, service starts or commits were performed.

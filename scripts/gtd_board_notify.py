@@ -6,7 +6,7 @@ each through the native app with the `board-card` category. Without native permi
 system script channel shows a plain notification instead.
 
 Responses: the native app writes `notifications/*.response.json`; `collect_responses` turns
-the four buttons into board feedback, logs reply text as an immediate note, and logs a
+the four buttons into board feedback, interprets reply text immediately, and logs a
 dismissal as a weak signal. A response to the test card is only acknowledged.
 """
 from __future__ import annotations
@@ -139,12 +139,23 @@ def apply(state: gtd.State, response: Dict[str, Any], now: dt.datetime) -> Dict[
     else:
         return {**base, "action": "ignored", "value": action}
     log_event(state, event)
+    if action == "reply":
+        import gtd_reply
+        event["interpretation"] = gtd_reply.handle(state, item_id, text, now)
     return event
 
 
 def collect_responses(state: gtd.State, now: Optional[dt.datetime] = None) -> List[Dict[str, Any]]:
+    """Claim collection while replies are interpreted; another collector returns immediately."""
+    try:
+        with state.lock("board-responses.lock"):
+            return _collect_responses(state, gtd_board.local_time(now))
+    except gtd.ProcessorBusy:
+        return []
+
+
+def _collect_responses(state: gtd.State, now: dt.datetime) -> List[Dict[str, Any]]:
     """Process every pending response file once (oldest first) and delete it."""
-    now = gtd_board.local_time(now)
     folder = state.base / "notifications"
     results = []
     for path in sorted(folder.glob("*.response.json")) if folder.is_dir() else []:

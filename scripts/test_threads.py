@@ -1,12 +1,16 @@
 """Tests for project stages, memory rules and nudge ranking. Synthetic data only, no model calls."""
 import datetime as dt
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 import gtd
+import gtd_board_api
+import gtd_inference
 import gtd_memory
+import gtd_provider
 import gtd_threads
 
 NOW = dt.datetime(2026, 11, 11, 12, 0, tzinfo=dt.timezone.utc)
@@ -84,6 +88,120 @@ class ThreadsTest(unittest.TestCase):
             gtd_memory.record(self.state, "X", "sleeping")
         with self.assertRaises(ValueError):
             gtd_memory.record(self.state, "X", "paused", next_at="tomorrow")
+
+    def provider(self) -> None:
+        """Configure a synthetic provider; never contact its fake endpoint."""
+        gtd.atomic_json(self.state.base / "config.json", {"extractor_backend": "provider"})
+        gtd.atomic_json(self.state.base / "secrets/provider.json",
+                        {"base_url": "https://invalid.test", "api_key": "fake", "model": "fake"})
+
+    def test_daily_launch_gates_and_local_day_throttle(self) -> None:
+        """Launch once after local 09:00, including the next date and offset conversion."""
+        local = dt.datetime(2026, 11, 11, 9).astimezone()
+        with patch.object(gtd_inference.subprocess, "Popen") as popen:
+            self.assertFalse(gtd_inference.start(self.state, local))
+            self.provider()
+            self.assertFalse(gtd_inference.start(self.state, local.replace(hour=8, minute=59)))
+            self.assertTrue(gtd_inference.start(self.state, local))
+            self.assertFalse(gtd_inference.start(self.state, local + dt.timedelta(hours=14)))
+            # A timestamp on another UTC date is still the same host-local date.
+            same_instant = (local + dt.timedelta(hours=14)).astimezone(dt.timezone(dt.timedelta(hours=14)))
+            self.assertFalse(gtd_inference.start(self.state, same_instant))
+            self.assertFalse(gtd_inference.start(self.state, (local + dt.timedelta(days=1)).replace(hour=8)))
+            self.assertTrue(gtd_inference.start(self.state, local + dt.timedelta(days=1)))
+        self.assertEqual(popen.call_count, 2)
+        self.assertEqual(popen.call_args.args[0][-3:], ["--state", str(self.state.base), "--infer"])
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertEqual(gtd_inference.status(self.state)["projects_inferred"], 0)
+        self.assertEqual((self.state.base / "memory/inference-status.json").stat().st_mode & 0o777, 0o600)
+
+    def test_daily_launch_lock_and_failed_attempt_are_not_retried(self) -> None:
+        """An active worker blocks another launcher; a failed launch consumes today's slot."""
+        self.provider()
+        local = dt.datetime(2026, 11, 11, 12).astimezone()
+        with patch.object(gtd_inference.subprocess, "Popen", side_effect=OSError("blocked")) as popen:
+            with self.state.lock("inference.lock"):
+                self.assertFalse(gtd_inference.start(self.state, local))
+            popen.assert_not_called()
+            self.assertFalse(gtd_inference.start(self.state, local))
+            self.assertTrue(gtd_inference.status(self.state)["error"])
+            self.assertFalse(gtd_inference.start(self.state, local))
+        self.assertEqual(popen.call_count, 1)
+
+    def test_inference_worker_reads_profile_and_never_confirms_stages(self) -> None:
+        """The worker invokes real cached inference with the profile and reports fresh successes."""
+        self.provider()
+        gtd_memory.folder(self.state).joinpath("profile.md").write_text("我做完能用就转工具。", encoding="utf-8")
+        with patch.object(gtd_threads, "scan_activity", return_value=self.activity), \
+             patch.object(gtd_provider, "chat_json", return_value={"stage": "tool", "confidence": 0.9}) as model:
+            value = gtd_inference.run(self.state, NOW)
+        self.assertEqual(value["projects_inferred"], 3)
+        self.assertEqual(set(value["projects"]), {"Alpha", "Beta", "Gamma"})
+        self.assertTrue(value["finished_at"])
+        self.assertIsNone(value["error"])
+        self.assertIn("我做完能用就转工具", model.call_args.args[2])
+        self.assertEqual(gtd_memory.projects(self.state), {})
+        self.assertEqual(gtd_board_api.get(self.state, "/api/memory")["inference_status"], value)
+        inferred = gtd_threads.json.loads((self.state.base / "memory/inferred.json").read_text())
+        self.assertTrue(all(n["kind"] == "confirm" for n in self.rank(inferred).values()))
+
+    def test_inference_status_records_partial_errors_and_cache_hits(self) -> None:
+        """Provider failures are visible; cached entries do not count as new inferences."""
+        self.provider()
+        with patch.object(gtd_threads, "scan_activity", return_value=self.activity), \
+             patch.object(gtd_provider, "chat_json", side_effect=[{"stage": "tool"},
+                          gtd_provider.ProviderError("offline"), {"stage": "active"}]) as model:
+            value = gtd_inference.run(self.state, NOW)
+            self.assertEqual(value["projects_inferred"], 2)
+            self.assertIn("offline", value["error"])
+            cached = gtd_inference.run(self.state, NOW + dt.timedelta(hours=1))
+        self.assertEqual(model.call_count, 3)
+        self.assertEqual(cached["projects_inferred"], 0)
+        with patch.object(gtd_threads, "cached_inference", side_effect=OSError("unavailable")):
+            failed = gtd_inference.run(self.state, NOW + dt.timedelta(days=1))
+        self.assertIn("unavailable", failed["error"])
+        self.assertTrue(failed["finished_at"])
+
+    def test_infer_cli_does_not_run_report_or_evaluation(self) -> None:
+        """The --infer entry point only delegates to the inference worker."""
+        with patch("sys.argv", ["gtd_threads.py", "--state", str(self.state.base), "--infer"]), \
+             patch.object(gtd_inference, "run", return_value={}) as run, \
+             patch.object(gtd_threads, "report") as report, patch.object(gtd_threads, "evaluate") as evaluate:
+            gtd_threads.main()
+        self.assertEqual(run.call_count, 1)
+        report.assert_not_called()
+        evaluate.assert_not_called()
+
+    def test_daemon_launches_inference_without_running_it_inline(self) -> None:
+        """Daily work is detached even when notification delivery is disabled."""
+        import gtd_board_notify
+        self.provider()
+        with patch.object(gtd_inference, "start") as start, \
+             patch.object(gtd_threads, "cached_inference", side_effect=AssertionError("inline inference")), \
+             patch.object(gtd_board_notify, "collect_responses"), patch.object(gtd_board_notify, "cycle"):
+            gtd.board_notifications(self.state, self.state.config(), False)
+        start.assert_called_once_with(self.state)
+
+    def test_worker_waits_for_launcher_lock_handoff(self) -> None:
+        """A fast child waits for launch reservation to release its shared lock."""
+        entered, finished = threading.Event(), threading.Event()
+        values: list[dict] = []
+
+        def worker() -> None:
+            """Run the worker in another thread while the launcher holds its lock."""
+            entered.set()
+            values.append(gtd_inference.run(self.state, NOW))
+            finished.set()
+
+        with patch.object(gtd_threads, "cached_inference", return_value={}):
+            with self.state.lock("inference.lock"):
+                thread = threading.Thread(target=worker)
+                thread.start()
+                self.assertTrue(entered.wait(1))
+                self.assertFalse(finished.wait(0.05))
+            thread.join(2)
+        self.assertTrue(finished.is_set())
+        self.assertIsNone(values[0]["error"])
 
 
 if __name__ == "__main__":
