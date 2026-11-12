@@ -17,3 +17,14 @@ combined promo (story → product walkthrough → bilibili Toy demo invitation).
   Fish Audio S2 Pro synthesizes the final narration under the license described above.
 - The bilibili video page, Toy page and Toy plaza shown in the film are simplified
   mock-ups, not screenshots. They point viewers to the web demo.
+
+## 文枢 film (v0.6.0 homepage)
+
+The homepage serves `site/media/wenshu.mp4`, a 48-second, 1920×1080, 30 fps film of the 文枢 board
+(windows sink → cards sort into quadrants → a deadline moves a card → notification → reply → proposal → memory page).
+Its source page, score and build script live outside this repository (OPC competition workspace).
+
+- Narration: Fish Audio cloud API, model `s2.1-pro`, public voice "沃雅妮莎" (`52816ff452124d15a47da5f8e77ecf7f`), no emotion tags.
+  It is a third-party public voice; check its terms on fish.audio before any commercial use.
+- Score and effects are generated from code with a fixed seed; no third-party samples.
+- All tasks, people and messages shown are fictional. Subtitles: `site/media/wenshu.vtt`.

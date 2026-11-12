@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Getting Things Done · 把记挂的事交给清单</title>
-<meta name="description" content="一个 macOS 上的 GTD 伙伴：从电脑活动里找出你答应过的事，只问需要你判断的问题，确认之后才写进 Apple 提醒事项与日历。开源 · MIT。">
+<title>文枢 · 替你记着没做完的事</title>
+<meta name="description" content="一块由 AI 维护的四象限看板：从你电脑上的工作记录里认出在做、做了一半、快到期的事，只在要紧的时候提醒你。macOS，MIT 开源，可接国产模型或自部署模型。">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Getting Things Done · 把记挂的事交给清单">
-<meta property="og:description" content="从电脑活动里找出你答应过的事，只问需要你判断的问题，确认之后才写进 Apple 提醒事项与日历。">
-<meta property="og:image" content="https://zgdllt.github.io/Getting-Things-Done/assets/workbench.png">
+<meta property="og:title" content="文枢 · 替你记着没做完的事">
+<meta property="og:description" content="AI 维护的四象限看板，只在要紧的时候提醒你。回一句话就算回答。">
+<meta property="og:image" content="https://zgdllt.github.io/Getting-Things-Done/assets/board.png">
 <meta property="og:url" content="https://zgdllt.github.io/Getting-Things-Done/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -20,105 +20,129 @@
 <a class="skip" href="#main">跳到正文</a>
 
 <header class="nav">
-  <a class="brand" href="#top"><img src="assets/icon.svg" width="34" height="34" alt=""><span>Getting Things Done</span></a>
+  <a class="brand" href="#top"><span class="seal" aria-hidden="true">枢</span><span>文枢</span></a>
   <nav aria-label="页面导航">
-    <a href="#how">工作方式</a>
-    <a href="#views">四个视图</a>
+    <a href="#board">看板</a>
+    <a href="#notify">通知</a>
+    <a href="#stage">何时提醒</a>
     <a href="#trust">数据与边界</a>
     <a href="#install">安装</a>
     <a href="https://github.com/zgdllt/Getting-Things-Done">GitHub ↗</a>
   </nav>
-  <a class="btn btn-small" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.1">下载 v0.5.1</a>
+  <a class="btn btn-small" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.6.0">下载 v0.6.0</a>
 </header>
 
 <main id="main">
   <!-- Hero -->
   <section class="hero" id="top">
     <div class="hero-copy">
-      <p class="eyebrow">A little room to think · macOS 上的 GTD 伙伴</p>
-      <h1><span class="nw">把记挂的事交给清单，</span><br><span class="nw">把<mark>注意力</mark>留给眼前。</span></h1>
-      <p class="lede">它从你的电脑活动里找出答应过别人的事，只问需要你判断的问题；<strong>你确认之后</strong>，才写进 Apple 提醒事项和日历。</p>
+      <p class="eyebrow">文枢 · macOS 上的提醒型助理</p>
+      <h1><span class="nw">替你记着</span><br><span class="nw"><mark>没做完</mark>的事。</span></h1>
+      <p class="lede">一块由 AI 维护的四象限看板。它从你电脑上的工作记录里认出在做、做了一半、快到期的事，排好轻重缓急；<strong>只在要紧的时候</strong>发一条通知，回一句话就算回答。</p>
       <div class="cta">
-        <a class="btn" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.1">下载 macOS 版 <small>Apple Silicon</small></a>
-        <a class="btn btn-ghost" href="#install">从源码安装 →</a>
+        <a class="btn" href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.6.0">下载 macOS 版 <small>v0.6.0 · Apple Silicon</small></a>
+        <a class="btn btn-ghost" href="#film">看 48 秒宣传片 →</a>
       </div>
       <ul class="meta">
-        <li>macOS 14+</li><li>MIT 开源</li><li>界面目前为中文</li><li>早期预览版</li>
+        <li>MIT 开源</li><li>数据留在本机</li><li>可接国产模型 / 自部署模型</li><li>早期预览</li>
       </ul>
     </div>
-    <figure class="hero-shots" aria-label="工作台截图（虚构演示数据）">
-      <img class="shot shot-back" src="assets/clarify.png" width="1440" height="1024" alt="待澄清视图：一张候选卡片和一个待回答的问题">
-      <img class="shot shot-front" src="assets/workbench.png" width="1440" height="1027" alt="今天视图：快速收集、待判断的问题、正式任务和今天的安排">
-      <figcaption class="hand">截图使用虚构演示数据</figcaption>
+    <figure class="hero-board" aria-label="文枢看板截图（虚构示意数据）">
+      <img class="shot" src="assets/board.png" width="1600" height="1000" alt="文枢看板：先做、安排时间、顺手处理、放一放四个象限，两轴交汇处是「枢」">
+      <figcaption class="hand">截图使用虚构示意数据</figcaption>
     </figure>
   </section>
 
+  <!-- Problem -->
+  <section class="section problem reveal" aria-labelledby="problem-title">
+    <div class="nums">
+      <div><b>25</b><span>个项目，创始人过去 7 天同时推进</span></div>
+      <i aria-hidden="true">→</i>
+      <div><b>124</b><span>件没做完的事，挂在这些项目下</span></div>
+      <i aria-hidden="true">→</i>
+      <div class="hot"><b>5</b><span>件今天真正值得打断他</span></div>
+    </div>
+    <h2 id="problem-title">有截止日期的事，日历早就在管。<br><span class="u">做到一半、被打断的项目</span>，没人管。</h2>
+    <p class="fine">数据：创始人本人 2026-11-05 至 11-12 的本地使用记录。</p>
+  </section>
+
   <!-- Film -->
-  <section class="film reveal" aria-labelledby="film-title">
+  <section class="film reveal" id="film" aria-labelledby="film-title">
     <div class="film-copy">
-      <p class="eyebrow">两分钟完整宣传片</p>
-      <h2 id="film-title">这个东西<br><span class="nw">治好了我的<mark>健忘</mark>。</span></h2>
-      <p>其实没有。只是答应过的事，<br>不用再靠我记了。</p>
-      <p class="fine">旁白由 Fish Audio S2 Pro 合成（Built with Fish Audio），人物与消息均为虚构。<a href="films/forgetful.html">看无声互动版 ↗</a> · <a href="films/index.html">产品介绍互动版 ↗</a></p>
+      <p class="eyebrow">48 秒宣传片</p>
+      <h2 id="film-title">卡片自己<br><span class="nw">排好、<mark>挪动</mark>、</span><br>等你点头。</h2>
+      <p>从散落的窗口，到四个象限；截止临近时卡片自己往前挪；回一句"改到周五交"，它马上听懂。</p>
+      <p class="fine">旁白为 AI 合成（Fish Audio），配乐由代码生成，画面与事项均为虚构示意。</p>
     </div>
     <div class="film-frame">
-      <video controls preload="none" playsinline poster="media/forgetful-poster.jpg" width="1920" height="1080">
-        <source src="media/gtd-combined.mp4" type="video/mp4">
-        你的浏览器不支持视频播放，可以<a href="media/gtd-combined.mp4">直接下载</a>。
+      <video controls preload="none" playsinline poster="media/wenshu-poster.jpg" width="1920" height="1080">
+        <source src="media/wenshu.mp4" type="video/mp4">
+        <track kind="subtitles" src="media/wenshu.vtt" srclang="zh" label="中文">
+        你的浏览器不支持视频播放，可以<a href="media/wenshu.mp4">直接下载</a>。
       </video>
     </div>
   </section>
 
-  <!-- GTD steps -->
-  <section class="section" id="how" aria-labelledby="how-title">
+  <!-- Board -->
+  <section class="section" id="board" aria-labelledby="board-title">
     <div class="section-head reveal">
-      <p class="eyebrow">The method · 受 GTD 工作法启发</p>
-      <h2 id="how-title">大脑用来想事情，<br>不是用来记事情。</h2>
-      <p>GTD 的五步里，最容易漏掉的是第一步。这个工具把「收集」交给电脑活动线索，其余每一步都留给你拍板。</p>
+      <p class="eyebrow">The board · 一块看板</p>
+      <h2 id="board-title">AI 维护，<br>你偶尔看一眼。</h2>
+      <p>左右是紧急与否，上下是重要与否，两轴交汇处是"枢"。每张卡都写明为什么放在这里。</p>
     </div>
-    <ol class="steps">
-      <li class="reveal"><span class="k">01</span><h3>收集</h3><p class="en">Capture</p><p>开启 Computer History 后，活动会留下线索；也可以随手「记一下」。</p></li>
-      <li class="reveal"><span class="k">02</span><h3>理清</h3><p class="en">Clarify</p><p>相关线索合成一张卡片，只问需要你判断的问题，原出处随时可查。</p></li>
-      <li class="reveal"><span class="k">03</span><h3>组织</h3><p class="en">Organize</p><p>预览、确认，行动进提醒事项，固定时间进日历。</p></li>
-      <li class="reveal"><span class="k">04</span><h3>回顾</h3><p class="en">Reflect</p><p>未处理的线索、未答的问题、逾期行动与等待事项，一页看完。</p></li>
-      <li class="reveal"><span class="k">05</span><h3>执行</h3><p class="en">Engage</p><p>「我有二十分钟」：从真实清单里挑下一步。</p></li>
+    <ol class="steps three">
+      <li class="reveal"><span class="k">01</span><h3>自己记</h3><p class="en">Notice</p><p>从你电脑上的工作记录里认出在推进的项目、做了一半的事、快到期的事，标出"停在哪、还剩什么"。</p></li>
+      <li class="reveal"><span class="k">02</span><h3>自己排</h3><p class="en">Sort</p><p>截止日期决定紧不紧急；重要与否从你的反馈里学。日历、提醒事项和 AI 线索说的是同一件事时自动合并。</p></li>
+      <li class="reveal"><span class="k">03</span><h3>你顺手校准</h3><p class="en">Calibrate</p><p>拖一下换象限、点一下标完成；每次改动都让它更懂你，也都能一键撤销。</p></li>
     </ol>
   </section>
 
-  <!-- Pipeline -->
-  <section class="section pipeline-wrap" aria-labelledby="flow-title">
+  <!-- Notify -->
+  <section class="section split" id="notify" aria-labelledby="notify-title">
     <div class="section-head reveal">
-      <p class="eyebrow">From clue to commitment</p>
-      <h2 id="flow-title">线索，<span class="u">不是承诺</span>。</h2>
-      <p>观察到的活动只是线索：它不会自动变成任务、截止日，更不会被当作「已完成」。</p>
-    </div>
-    <ol class="pipeline reveal">
-      <li><b>线索来源</b><span>Computer History 事件流、本地记忆摘要、随手记录</span></li>
-      <li><b>本地候选</b><span>保留原出处片段，关联较早的相关线索</span></li>
-      <li><b>需要你判断的问题</b><span>在 app 或 Codex 对话里批量回答</span></li>
-      <li><b>预览并确认</b><span>你点头才写入，回执持久保存</span></li>
-      <li class="end"><b>提醒事项 · 日历</b><span>正式状态以系统清单为准</span></li>
-    </ol>
-  </section>
-
-  <!-- Views -->
-  <section class="section" id="views" aria-labelledby="views-title">
-    <div class="section-head reveal">
-      <p class="eyebrow">Four views</p>
-      <h2 id="views-title">四个视图，各管一件事。</h2>
-      <p>四个视图统一支持滑动卡片，也可在设置里切回条目列表。原生 AppKit + 系统 WebKit。</p>
-    </div>
-    <div class="views">
-      <article class="view reveal"><span class="glyph" aria-hidden="true">◷</span><h3>今天</h3><p>已有提醒事项、当前与即将开始的日程、快速收集；逐张浏览卡片，点「标记完成」推进任务。</p></article>
-      <article class="view reveal"><span class="glyph" aria-hidden="true">▤</span><h3>待澄清</h3><p>候选摘要、来源片段与问题。「保存答复并整理」会立刻给出回应和修订后的下一步。</p></article>
-      <article class="view reveal"><span class="glyph" aria-hidden="true">◈</span><h3>项目与等待</h3><p>已确认的项目和它们关联的系统行动；仍在进行的等待事项。</p></article>
-      <article class="view reveal"><span class="glyph" aria-hidden="true">↺</span><h3>回顾</h3><p>未处理线索、未答问题、逾期行动、近期日程与最近的摘要。</p></article>
-    </div>
-    <div class="codex reveal">
-      <p class="eyebrow">在 Codex 里也能用 · <code>$personal-gtd</code></p>
-      <ul class="bubbles">
-        <li>澄清 GTD</li><li>记一下……</li><li>我有二十分钟，接下来做什么？</li><li>做一次 GTD 回顾</li>
+      <p class="eyebrow">Notifications · 只为要紧的事打断你</p>
+      <h2 id="notify-title">回一句话，<br><span class="u">就算回答</span>。</h2>
+      <p>通知只发"先做"象限里的事，另外每天最多一件"可能忘了"的重要事；同一件事 12 小时内不重复，22:00–9:00 不打扰。</p>
+      <ul class="ticks">
+        <li><b>按钮</b>开始 / 已完成 / 稍后 / 不重要，原地生效</li>
+        <li><b>回一句话</b>AI 读懂成完成、改期、在等别人或新任务；状态当场生效</li>
+        <li><b>改日期、加新任务</b>先做成一条提议，你点"好"才写进去</li>
+        <li><b>读不懂</b>原样存成这件事的备注，不会丢</li>
       </ul>
+    </div>
+    <figure class="mock reveal" aria-label="通知与提议示意">
+      <div class="notif">
+        <div class="tp"><span class="ic">枢</span><div><div class="ap"><span>文枢</span><span>现在</span></div>
+          <div class="t">把论文初稿发给导师</div><div class="su">先做 · 今天截止</div></div></div>
+        <div class="bt"><span>开始</span><span>已完成</span><span>稍后</span><span>不重要</span></div>
+        <div class="rp"><span>改到周五交</span><span>发送</span></div>
+      </div>
+      <div class="down" aria-hidden="true">↓ 当场读懂</div>
+      <div class="prop">
+        <div class="k">你说「改到周五交」</div>
+        <div class="v">→ 截止改到 11 月 13 日（周五）？</div>
+        <div class="b"><span>好</span><span class="n">不用</span></div>
+      </div>
+      <figcaption class="hand">样式示意；按钮与回复框为 macOS 原生通知能力</figcaption>
+    </figure>
+  </section>
+
+  <!-- Stage -->
+  <section class="section" id="stage" aria-labelledby="stage-title">
+    <div class="section-head reveal">
+      <p class="eyebrow">When to remind · 何时提醒</p>
+      <h2 id="stage-title">决定要不要提醒的，<br>是<span class="u">项目所处的阶段</span>，<br>不是几天没动。</h2>
+      <p>创始人把 7 条按"几天没动"试算的提醒逐条标注：它们处在完全不同的阶段，只有 2 条该发。</p>
+    </div>
+    <div class="stages reveal">
+      <div><span class="dots"><i></i><i></i><i></i></span><b>做成了工具，在别处使用</b><em>不提醒</em></div>
+      <div><span class="dots"><i></i><i></i></span><b>已完成，或被新项目取代</b><em>不提醒</em></div>
+      <div class="go"><span class="dots"><i></i></span><b>质量达标，先停，已有计划</b><em>到计划那天提醒</em></div>
+      <div class="go"><span class="dots"><i></i></span><b>卡住了，拿不定主意</b><em>帮你判断怎么继续</em></div>
+    </div>
+    <div class="trust-grid two reveal">
+      <div><h3>AI 猜，你确认一次</h3><p>让模型盲猜阶段，7 个只对 3 个，判错时还很自信。所以 AI 只负责发现"这个项目安静了"并给出猜测；第一次问你一句、点一下确认，写进记忆，之后不再重复问。</p></div>
+      <div><h3>画像用你自己的话写</h3><p>在"记忆"页写下"课程作业我都会按时交""网站寒假再说"。AI 每天 9 点后带着画像重读一遍各项目的阶段。</p></div>
     </div>
   </section>
 
@@ -126,15 +150,15 @@
   <section class="section trust" id="trust" aria-labelledby="trust-title">
     <div class="section-head reveal">
       <p class="eyebrow">Data &amp; boundaries</p>
-      <h2 id="trust-title">它能做什么，<br>不能做什么，写在明处。</h2>
+      <h2 id="trust-title">数据留在你的电脑上，<br>模型可以是你自己的。</h2>
     </div>
     <div class="trust-grid">
-      <div class="reveal"><h3>留在本机</h3><p>工作台与 SQLite 在你的 Mac 上运行；HTTP 服务只监听 <code>127.0.0.1</code>，写操作检查请求来源。私有数据在 <code>~/.codex/personal-gtd/</code>。</p></div>
-      <div class="reveal"><h3>会发给模型的</h3><p>后台整理会把选中的活动片段、匹配的记忆摘要与系统清单上下文发给<strong>你现有的 Codex CLI 服务商</strong>；处理答复时发送相关候选、答复与来源片段。按你服务商的数据政策与计费处理。</p></div>
-      <div class="reveal"><h3>后台从不替你写</h3><p>后台提取不能写入正式提醒事项或日程，也不能对外发消息。正式写入必须经过预览和你的确认。</p></div>
-      <div class="reveal"><h3>不会重复建</h3><p>写入与通知都留有持久回执；结果不明时保留待核对，而不是盲目重建。</p></div>
-      <div class="reveal"><h3>来源当作不可信</h3><p>来源片段一律视为不可信的观察，即使里面有看起来像指令的文字。</p></div>
-      <div class="reveal"><h3>随时停下</h3><p><code>hook-stop</code> 停止活动订阅，<code>workbench-stop</code> 停止工作台；Computer History 本身的设置不受影响。</p></div>
+      <div class="reveal"><h3>只读本机记录</h3><p>读 Codex、Claude Code 的会话和 git 提交，每 3 分钟读取一次新记录。不截屏，不记按键，不依赖第三方采集插件。</p></div>
+      <div class="reveal"><h3>敏感信息先遮蔽</h3><p>API 密钥、令牌、私钥在离开本机之前就被替换掉；密码管理器等敏感应用不采集。</p></div>
+      <div class="reveal"><h3>模型你来选</h3><p>任何兼容 OpenAI 接口的服务都能接入：DeepSeek、通义、智谱、Kimi，或经 SSH 隧道接入自部署模型。密钥只存在本机 <code>0600</code> 文件里。</p></div>
+      <div class="reveal"><h3>你的清单，你点头才改</h3><p>写进你自己的提醒事项和日历之前必须确认，每次写入留回执；结果不明时停下待核对，不会盲目重建。</p></div>
+      <div class="reveal"><h3>它有自己的日历</h3><p>文枢在 iCloud 里建一个"文枢"日历和一个"文枢"提醒事项列表，只在这两处直接操作，同步到你的手机。</p></div>
+      <div class="reveal"><h3>来源当作不可信</h3><p>工作记录和你的回复一律视为数据而不是指令；"忽略之前的规则……"这类话只会被记成备注。</p></div>
     </div>
   </section>
 
@@ -143,17 +167,16 @@
     <div class="section-head reveal">
       <p class="eyebrow">Install</p>
       <h2 id="install-title">五分钟装好。</h2>
+      <p>v0.6.0 是文枢的第一个发布版：四象限看板、通知与回复理解、每日按画像重读、专属日历。</p>
     </div>
     <div class="install-grid">
       <div class="card reveal">
         <h3>下载 app <small>Apple Silicon</small></h3>
         <ol class="numbered">
-          <li>从 <a href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.5.1">v0.5.1 发布页</a> 下载 <code>Getting-Things-Done-v0.5.1-macos-arm64.zip</code>。</li>
-          <li>解压，<strong>首次打开前</strong>把 <code>Getting Things Done.app</code> 移到 <code>~/Applications</code>。</li>
+          <li>从 <a href="https://github.com/zgdllt/Getting-Things-Done/releases/tag/v0.6.0">v0.6.0 发布页</a> 下载 <code>Getting-Things-Done-v0.6.0-macos-arm64.zip</code>。</li>
+          <li>解压，<strong>首次打开前</strong>把 app 移到 <code>~/Applications</code>。</li>
           <li>打开 app。app 为 ad-hoc 签名、未公证；若被拦截，在「系统设置 → 隐私与安全性」里选择「仍要打开」。</li>
-          <li>需要 Codex 对话技能时，再运行：</li>
         </ol>
-        <div class="code"><pre><code>python3 -B "$HOME/Applications/Getting Things Done.app/Contents/Resources/skill/scripts/install.py"</code></pre><button type="button" class="copy">复制</button></div>
       </div>
       <div class="card reveal">
         <h3>从源码安装 <small>Intel 也可用</small></h3>
@@ -161,30 +184,36 @@
 cd Getting-Things-Done
 python3 scripts/install.py
 python3 ~/.codex/skills/personal-gtd/scripts/gtd.py workbench</code></pre><button type="button" class="copy">复制</button></div>
-        <p>准备好后授权并读取当前清单（<code>doctor</code> 不请求权限，授权也不等于批准任何任务）：</p>
-        <div class="code"><pre><code>python3 ~/.codex/skills/personal-gtd/scripts/gtd.py doctor
-python3 ~/.codex/skills/personal-gtd/scripts/gtd.py authorize
-python3 ~/.codex/skills/personal-gtd/scripts/gtd.py snapshot</code></pre><button type="button" class="copy">复制</button></div>
+        <p>已安装过的，用 <code>python3 scripts/install.py --update</code> 更新。授权读取提醒事项与日历（授权不等于批准任何任务），再为文枢建好它自己的日历和清单：</p>
+        <div class="code"><pre><code>python3 ~/.codex/skills/personal-gtd/scripts/gtd.py authorize
+python3 ~/.codex/skills/personal-gtd/scripts/gtd.py setup-owned</code></pre><button type="button" class="copy">复制</button></div>
+        <p>模型在 App 的 <b>设置 → 模型供应商</b> 里选择；不配置也能用看板和按钮。</p>
       </div>
     </div>
     <div class="reqs reveal">
       <h3>需要</h3>
       <ul>
-        <li><b>macOS 14+</b>，预编译版面向 Apple Silicon</li>
+        <li><b>macOS 14+</b>，Xcode Command Line Tools（<code>xcode-select --install</code>）</li>
         <li><b>Python 3.11+</b>，Homebrew 版本会被自动识别</li>
-        <li><b>Codex CLI</b>，已登录你选择的模型服务商</li>
-        <li><b>Computer History 插件</b>，由你自行开启，用于自动收集；不开启也能手动收集与使用工作台</li>
+        <li><b>一个模型</b>：任意 OpenAI 兼容接口、自部署模型，或已登录的 Codex CLI</li>
         <li>提醒事项、日历与通知权限，由 macOS 在你启用时请求</li>
       </ul>
-      <p>开启自动收集：在 Codex 里询问 Computer History 的 <code>eventStreamRootPath</code>，再运行 <code>gtd.py hook-start --root '&lt;返回的路径&gt;'</code>。完整说明见 <a href="https://github.com/zgdllt/Getting-Things-Done#readme">README</a>。</p>
+      <p>完整说明见 <a href="https://github.com/zgdllt/Getting-Things-Done#readme">README</a>；设计与验证记录见 <a href="https://github.com/zgdllt/Getting-Things-Done/blob/main/references/verification.md">verification.md</a>。</p>
     </div>
+  </section>
+
+  <!-- Previous generation -->
+  <section class="section legacy reveal" aria-labelledby="legacy-title">
+    <p class="eyebrow">上一代 · Getting Things Done</p>
+    <h2 id="legacy-title">我们先做了一个"提问式"助理，第三天就没人回答了。</h2>
+    <p>第一版把每条线索变成一个问题，等人逐条回答、审批。头两天处理了 110 条，第三天起几乎停了，一周后积压 249 条待办、226 个问题。文枢由此改成 AI 自己维护状态、只在要紧时提醒。上一代的工作台仍在 <code>/classic</code>，宣传片也保留着：<a href="media/gtd-combined.mp4">两分钟宣传片</a> · <a href="films/forgetful.html">互动版</a>。</p>
   </section>
 </main>
 
 <footer class="footer">
-  <div class="footer-brand"><img src="assets/icon.svg" width="40" height="40" alt=""><div><b>Getting Things Done</b><span>留一点心力，给正在做的事。</span></div></div>
-  <p>受 GTD 工作法与 Computer History 交互模型启发的独立项目，不是 Apple、OpenAI 或 David Allen 的官方产品。<br>宣传片旁白由 Fish Audio S2 Pro 合成 · Built with Fish Audio · 配乐与音效为程序生成。</p>
-  <p><a href="https://github.com/zgdllt/Getting-Things-Done">GitHub</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/releases">Releases</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/blob/main/LICENSE">MIT License</a> © 2026 zgdllt</p>
+  <div class="footer-brand"><span class="seal big" aria-hidden="true">枢</span><div><b>文枢</b><span>替你记着没做完的事，只在要紧的时候提醒你。</span></div></div>
+  <p>独立开源项目，MIT 协议。方法受 GTD 工作法启发；"Getting Things Done / GTD"为第三方商标，本项目与 David Allen、Apple、OpenAI 均无关联。<br>宣传片旁白为 AI 合成（Fish Audio）；所有截图、人物与事项均为虚构示意。</p>
+  <p><a href="https://github.com/zgdllt/Getting-Things-Done">GitHub</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/releases">Releases</a> · <a href="https://github.com/zgdllt/Getting-Things-Done/issues">反馈问题</a></p>
 </footer>
 </body>
 </html>

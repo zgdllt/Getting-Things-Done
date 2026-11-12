@@ -22,6 +22,8 @@ SITE = ROOT / "site"
 SHARED: list[tuple[str, str]] = [
     ("docs/images/workbench.png", "assets/workbench.png"),
     ("docs/images/clarify.png", "assets/clarify.png"),
+    ("docs/images/board.png", "assets/board.png"),
+    ("docs/images/memory.png", "assets/memory.png"),
     ("docs/images/app-icon.png", "assets/app-icon.png"),
     ("web/icon.svg", "assets/icon.svg"),
     ("docs/promo/index.html", "films/index.html"),
