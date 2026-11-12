@@ -295,7 +295,7 @@ Implemented reply interpretation in `gtd_reply.py`, pending decisions in
 Notification collection, board JSON, board/memory APIs, the thread CLI, daemon and
 installer are wired to these modules. `web/` was not edited for this task; a concurrent
 `web/board.js` change was observed and preserved. Work used the provided checkout
-at `/Users/limh24/.codex/worktrees/gtd-nudges`, verified as `feature/nudges` at `32a9bc0`.
+in a separate Git worktree, verified as `feature/nudges` at `32a9bc0`.
 
 Decisions where the brief did not specify behavior:
 
