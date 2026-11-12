@@ -11,7 +11,8 @@
   const DONE_LABEL = { doing: "正在做", done: "已完成", tool: "已经变成工具", blocked: "卡住了", not_important: "不重要" };
   const WEEK = "日一二三四五六";
   const state = { view: "board", board: null, memory: null, providers: null, notify: null, notifyPoll: null, expanded: new Set(), q4Open: false,
-    menuFor: null, undo: null, drag: null, fresh: null, lastLoad: 0, toastTimer: null };
+    menuFor: null, undo: null, drag: null, fresh: null, lastLoad: 0, toastTimer: null,
+    notesOpen: new Set(), proposalBusy: new Set(), proposalError: {} };
   const main = $("#main"), menu = $("#menu"), toastBox = $("#toast");
 
   async function api(path, body, token) {
@@ -54,7 +55,45 @@
     const minutes = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
     return minutes < 1 ? "刚刚" : minutes < 60 ? `${minutes} 分钟前` : `${Math.round(minutes / 60)} 小时前`;
   }
+  function since(iso) {
+    const at = new Date(iso);
+    if (!iso || isNaN(at)) return "";
+    const minutes = Math.max(0, Math.round((Date.now() - at) / 60000));
+    if (minutes < 1) return "刚刚";
+    if (minutes < 60) return `${minutes} 分钟前`;
+    if (minutes < 1440) return `${Math.round(minutes / 60)} 小时前`;
+    return `${Math.round(minutes / 1440)} 天前`;
+  }
+  function dayLabel(due) {
+    const at = new Date(due + "T12:00:00");
+    return isNaN(at) ? esc(due) : `<span class="day">${at.getMonth() + 1}月${at.getDate()}日（周${WEEK[at.getDay()]}）</span>`;
+  }
   const itemById = (id) => state.board?.items.find((i) => i.id === id);
+
+  // A reply the agent understood as a date change or a new task waits here for one tap.
+  function proposalStrip(p) {
+    const busy = state.proposalBusy.has(p.id) ? " disabled" : "";
+    const error = state.proposalError[p.id];
+    const ask = p.kind === "new_task"
+      ? `新建「${esc(short(p.title, 18))}」${p.due ? ` · ${dayLabel(p.due)}` : ""}？`
+      : `你说「${esc(short(p.text, 14))}」→ 截止改到 ${dayLabel(p.due)}？`;
+    const yes = p.kind === "new_task" ? "加入" : "好";
+    return `<div class="proposal" role="group" aria-label="待确认的提议：${esc(p.summary)}"><p>${ask}</p><div class="proposal-actions">` +
+      `<button type="button" class="yes" data-proposal="${esc(p.id)}" data-accept="1"${busy}>${yes}</button>` +
+      `<button type="button" data-proposal="${esc(p.id)}" data-accept="0"${busy}>不用</button></div>` +
+      `${error ? `<p class="proposal-error" role="alert">${esc(error)}</p>` : ""}</div>`;
+  }
+  const noteText = (n) => esc(n.waiting_on ? `在等：${n.waiting_on}` : n.summary || n.text);
+  function notesBlock(item) {
+    const notes = item.notes || [];
+    if (!notes.length) return "";
+    const open = state.notesOpen.has(item.id), older = notes.slice(1);
+    const first = `<p class="note" title="${esc(notes[0].text)}"><span aria-hidden="true">✎</span>${noteText(notes[0])}<time>${esc(since(notes[0].timestamp))}</time></p>`;
+    if (!older.length) return first;
+    const toggle = `<button type="button" class="notes-toggle" data-notes="${esc(item.id)}" aria-expanded="${open}">${open ? "收起" : `更早的 ${older.length} 条`}</button>`;
+    const list = open ? `<ul class="notes-older">${older.map((n) => `<li title="${esc(n.text)}">${noteText(n)}<time>${esc(since(n.timestamp))}</time></li>`).join("")}</ul>` : "";
+    return first + toggle + list;
+  }
 
   function card(item, byId) {
     const urgent = item.urgency >= 0.7;
@@ -62,12 +101,12 @@
     const open = state.expanded.has(item.id);
     const reasons = [...(item.due ? [] : item.urgency_reasons || []), ...(item.importance_reasons || [])].filter((r) => !/未设截止/.test(r)).slice(0, 2);
     const left = item.left_off ? `停在：${esc(item.left_off)}` : "";
-    const rest = item.remaining ? `还剩：${esc(item.remaining)}` : "";
+    const rest = item.remaining && !String(item.title).includes(item.remaining) ? `还剩：${esc(item.remaining)}` : "";
     const children = !kids.length ? "" : `<button type="button" class="children-toggle" data-children="${esc(item.id)}" aria-expanded="${open}">${open ? "收起" : "展开"} ${kids.length} 件子任务</button>` +
       (open ? `<ul class="children">${kids.map((k) => `<li><span title="${esc(k.title)}">${esc(k.title)}</span><button type="button" data-done="${esc(k.id)}" aria-label="已完成：${esc(k.title)}" title="已完成">✓</button><button type="button" data-menu="${esc(k.id)}" aria-haspopup="menu" aria-label="更多操作：${esc(k.title)}">⋯</button></li>`).join("")}</ul>` : "");
     return `<article class="card${state.fresh === item.id ? " fresh" : ""}" draggable="true" data-id="${esc(item.id)}">
-      <div class="card-top"><span class="kind">${KIND[item.kind] || ""}</span><span class="status ${esc(item.status)}">${STATUS[item.status] || esc(item.status)}</span>${item.due ? `<span class="due${urgent ? " urgent" : ""}">${esc(relDue(item.due))}</span>` : ""}${item.pinned ? '<span class="pin" title="你校准过它的位置">◆</span>' : ""}<button type="button" class="more" data-menu="${esc(item.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作：${esc(item.title)}">⋯</button></div>
-      <h3>${esc(item.title)}</h3>${reasons.length ? `<p class="why">${reasons.map(esc).join(" · ")}</p>` : ""}${left || rest ? `<p class="left-off">${left}${left && rest ? "<br>" : ""}${rest}</p>` : ""}${children}</article>`;
+      <div class="card-top"><span class="kind">${KIND[item.kind] || ""}</span><span class="status ${esc(item.status)}">${STATUS[item.status] || esc(item.status)}</span>${item.due ? `<span class="due${urgent ? " urgent" : ""}">${esc(relDue(item.due))}</span>` : ""}${item.due && item.due_source === "user" ? '<span class="mine" title="这个截止日是你在回复里定的">你定的</span>' : ""}${item.pinned ? '<span class="pin" title="你校准过它的位置">◆</span>' : ""}<button type="button" class="more" data-menu="${esc(item.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作：${esc(item.title)}">⋯</button></div>
+      <h3>${esc(item.title)}</h3>${reasons.length ? `<p class="why">${reasons.map(esc).join(" · ")}</p>` : ""}${left || rest ? `<p class="left-off">${left}${left && rest ? "<br>" : ""}${rest}</p>` : ""}${(item.proposals || []).map(proposalStrip).join("")}${notesBlock(item)}${children}</article>`;
   }
 
   function quadrant(q, items, byId) {
@@ -96,6 +135,9 @@
     const title = `「${short(f.title || f.item_id, 20)}」`;
     if (f.action === "undo") return `撤销了对${title}的调整`;
     if (f.action === "reply") return `在通知里回复${title}：${f.value}`;
+    if (f.action === "reply_interpreted") return `理解了你对${title}的回复：${f.summary}`;
+    if (f.action === "proposal_accepted") return `接受了提议：${f.summary}`;
+    if (f.action === "proposal_rejected") return `没采纳提议：${f.summary}`;
     if (f.action === "dismiss") return `划掉了${title}的提醒`;
     if (f.action === "open") return `点开了${title}的提醒`;
     if (f.action === "test") return "测试通知收到了回应";
@@ -106,6 +148,16 @@
   function fmtTime(iso) { const d = new Date(iso); return isNaN(d) ? "" : `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; }
   const stageOptions = (current) => (state.memory.stages || []).map((s) => `<option value="${s}" ${s === current ? "selected" : ""}>${STAGES[s] || s}</option>`).join("");
 
+  // When the agent last re-read the projects with the profile (daily, after 09:00).
+  function inferenceLine(s) {
+    if (!s || !s.started_at) return '<p class="infer-status">还没运行过（每天 9 点后，配置了模型才会运行）</p>';
+    if (!s.finished_at) return `<p class="infer-status running">正在按画像重读项目…（${esc(since(s.started_at))}开始）</p>`;
+    const n = s.projects_inferred || 0, when = esc(since(s.finished_at));
+    if (s.error && !n) return `<p class="infer-status error" title="${esc(s.error)}">上次按画像重读项目：${when}，没有成功（${esc(short(s.error, 40))}）</p>`;
+    const done = n ? `更新了 ${n} 个项目` : "没有需要更新的项目";
+    return `<p class="infer-status"${n ? ` title="${esc((s.projects || []).join("、"))}"` : ""}>上次按画像重读项目：${when}，${done}${s.error ? "，有部分没成功" : ""}</p>`;
+  }
+
   function memoryView() {
     const m = state.memory;
     if (!m) return '<div class="loading"><p>正在读取记忆…</p></div>';
@@ -114,7 +166,7 @@
     const log = m.feedback.map((f) => `<li><time>${esc(fmtTime(f.timestamp))}</time><span>${esc(describe(f))}</span></li>`).join("")
       || "<li><time></time><span>还没有校准记录。在看板上挪一挪卡片，这里就会出现。</span></li>";
     return `<header class="page-head"><h1>它对你的认识</h1><p>agent 读这些来判断事情的轻重和阶段。你在看板上的每次调整都会记在右边；这里的内容也可以直接改。</p></header>
-      <div class="mem-grid"><article class="panel"><h2>画像</h2><p class="hint">你的习惯与偏好，用你自己的话写。</p><textarea id="profile" aria-label="用户画像">${esc(m.profile)}</textarea><div class="row-actions"><button type="button" class="primary" data-save-profile>保存画像</button></div></article>
+      <div class="mem-grid"><article class="panel"><h2>画像</h2><p class="hint">你的习惯与偏好，用你自己的话写。</p>${inferenceLine(m.inference_status)}<textarea id="profile" aria-label="用户画像">${esc(m.profile)}</textarea><div class="row-actions"><button type="button" class="primary" data-save-profile>保存画像</button></div></article>
       <article class="panel"><h2>最近的校准</h2><ol class="log">${log}</ol></article>
       <article class="panel wide"><h2>项目阶段</h2><p class="hint">「已成工具」「已完成」「被取代」的项目不会被提醒；「暂停·有计划」只在计划那天提醒。</p><table class="stages"><thead><tr><th>项目</th><th>阶段</th><th>下一步</th><th>日期</th><th>备注</th><th></th></tr></thead><tbody>${rows}
         <tr data-new><td><input data-field="name" placeholder="项目名" aria-label="新项目名"></td><td><select data-field="stage" aria-label="新项目阶段">${stageOptions("active")}</select></td><td><input data-field="next_step" placeholder="下一步"></td><td><input type="date" data-field="next_at" aria-label="计划日期"></td><td><input data-field="note" placeholder="备注"></td><td><button type="button" class="ghost" data-save-project>添加</button></td></tr></tbody></table></article></div>`;
@@ -182,6 +234,25 @@
     } catch (error) { toast(error.message, { error: true }); }
   }
 
+  async function decideProposal(id, accept) {
+    if (state.proposalBusy.has(id)) return;
+    const owner = state.board?.items.find((i) => (i.proposals || []).some((p) => p.id === id));
+    const p = owner?.proposals.find((x) => x.id === id);
+    state.proposalBusy.add(id); delete state.proposalError[id]; render();
+    try {
+      const result = await api("/api/board/proposal", { id, accept });
+      state.board = result; state.lastLoad = Date.now();
+      if (owner) state.fresh = owner.id;
+      const done = !accept ? "好，不改" : p?.kind === "new_task" ? `已新建「${short(p.title, 14)}」` : `截止已改到 ${p ? dayLabel(p.due).replace(/<[^>]+>/g, "") : "新日期"}`;
+      toast(result.refresh_pending ? done + "，提醒事项稍后同步" : done);
+    } catch (error) {
+      state.proposalError[id] = error.message;
+    } finally {
+      state.proposalBusy.delete(id); render();
+      document.querySelector(`[data-id="${CSS.escape(owner?.id || "")}"] [data-proposal], [data-id="${CSS.escape(owner?.id || "")}"] .more`)?.focus();
+    }
+  }
+
   function openMenu(button) {
     const item = itemById(button.dataset.menu);
     if (!item) return;
@@ -218,6 +289,8 @@
     if (t.dataset.menu) return state.menuFor === t.dataset.menu ? closeMenu() : openMenu(t);
     if (t.dataset.act) return feedback(state.menuFor, t.dataset.act, t.dataset.act === "move" ? Number(t.dataset.val) : t.dataset.val);
     if (t.dataset.done) return feedback(t.dataset.done, "status", "done");
+    if (t.dataset.proposal) return decideProposal(t.dataset.proposal, t.dataset.accept === "1");
+    if (t.dataset.notes) { state.notesOpen.has(t.dataset.notes) ? state.notesOpen.delete(t.dataset.notes) : state.notesOpen.add(t.dataset.notes); return render(); }
     if (t.dataset.children) { state.expanded.has(t.dataset.children) ? state.expanded.delete(t.dataset.children) : state.expanded.add(t.dataset.children); return render(); }
     if (t.hasAttribute("data-q4")) { state.q4Open = !state.q4Open; return render(); }
     if (t.hasAttribute("data-undo")) {
