@@ -9,6 +9,7 @@ import gtd
 import gtd_board
 import gtd_board_merge
 import gtd_memory
+import gtd_owned
 
 
 def pending(state: gtd.State) -> list[dict[str, Any]]:
@@ -30,8 +31,15 @@ def create(state: gtd.State, item_id: str, result: dict[str, Any], text: str,
 def enrich(state: gtd.State, items: list[dict[str, Any]], prefs: dict[str, Any]) -> None:
     """Attach the three newest notes and all proposals for surviving or merged IDs."""
     proposals = pending(state)
+    owned = gtd_owned.owned_ids(state)
+    snapshot = gtd_board.read_json(state.base / "last-snapshot.json") if any(owned.values()) else {}
+    owned_events = {row["id"] for row in snapshot.get("events", []) if row.get("calendar_id") == owned["owned_calendar_id"]}
+    owned_reminders = {row["id"] for row in snapshot.get("reminders", []) if row.get("list_id") == owned["owned_list_id"]}
     for item in items:
         identities = {item["id"], *item.get("merged_ids", [])}
+        item["owned"] = any(i.startswith("event:") and i.split(":", 2)[1] in owned_events
+                            or i.startswith("reminder:") and i.removeprefix("reminder:") in owned_reminders
+                            for i in identities)
         notes = [note for identity in identities for note in prefs["notes"].get(identity, [])]
         item["notes"] = sorted(notes, key=lambda note: note["timestamp"], reverse=True)[:3]
         item["proposals"] = [proposal for proposal in proposals if proposal["item_id"] in identities]
@@ -68,8 +76,16 @@ def decide(state: gtd.State, identity: str, accept: bool, now: dt.datetime) -> d
         if proposal is None:
             raise ValueError("提案已处理或不存在")
         if accept:
-            if proposal["kind"] == "new_task":
+            if proposal["kind"] == "new_task" and proposal["due"] and gtd_owned.owned_ids(state)["owned_list_id"]:
+                # A confirmed, dated task becomes a real reminder in 文枢's own list (syncs and rings).
+                result = gtd_owned.create_reminder(state, proposal["title"], proposal["due"], proposal["id"])
+                result["applied_to"] = "owned_list"
+            elif proposal["kind"] == "new_task":
                 result = gtd.capture(state, proposal["title"], suggested_due=proposal["due"])
+            elif proposal["item_id"].startswith("event:") and gtd_owned.is_owned(state, proposal["item_id"]):
+                # 文枢's own calendar: move the real event, not just the board's view.
+                result = gtd_owned.reschedule_event(state, proposal["item_id"], proposal["due"], proposal["id"])
+                result["applied_to"] = "owned_calendar"
             elif (state.base / "workbench-plans" / ("reply-" + proposal["id"] + ".json")).exists():
                 result = reschedule_reminder(state, proposal, {})
             else:
@@ -84,6 +100,7 @@ def decide(state: gtd.State, identity: str, accept: bool, now: dt.datetime) -> d
                     prefs = gtd_board.preferences(state)
                     prefs["due_overrides"][card["id"] if card else proposal["item_id"]] = proposal["due"]
                     gtd.atomic_json(gtd_memory.folder(state) / "preferences.json", prefs)
+                    result["applied_to"] = "board_only"
         gtd.atomic_json(gtd_memory.folder(state) / "proposals.json",
                         {"proposals": [entry for entry in proposals if entry["id"] != identity]})
         log_event(state, {"action": "proposal_accepted" if accept else "proposal_rejected",

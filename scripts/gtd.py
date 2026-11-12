@@ -912,6 +912,7 @@ def main():
     answer.add_argument("text")
     dismiss = sub.add_parser("dismiss")
     dismiss.add_argument("key")
+    sub.add_parser("setup-owned", help="Create or reuse 文枢's own calendar and reminder list")
     args = parser.parse_args()
     state = State(args.state)
     if args.command.startswith("workbench"):
@@ -922,6 +923,10 @@ def main():
                  "state": str(state.base), "config": state.config()}
     elif args.command == "authorize":
         value = native(state, "authorize")
+    elif args.command == "setup-owned":
+        import gtd_owned
+        snapshot(state)
+        value = {"ok": True, **gtd_owned.setup(state)}
     elif args.command == "snapshot":
         data = snapshot(state)
         value = {"ok": True, "path": str(state.base/"last-snapshot.json"), "permissions": data["permissions"],

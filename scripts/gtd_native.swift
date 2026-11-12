@@ -192,6 +192,25 @@ func apply(_ request: [String: Any], store: EKEventStore) throws -> [String: Any
         list.title = title; list.source = source
         try store.saveCalendar(list, commit: true)
         return ["ok": true, "item": listValue(list)]
+    case "create_calendar":
+        // An event calendar 文枢 owns; same reuse rules as create_list.
+        try require(.event)
+        let title = try text(request, "title")
+        let source: EKSource
+        if let id = request["source_id"] as? String {
+            guard let found = store.sources.first(where: { $0.sourceIdentifier == id }) else { try fail("Unknown source_id") }
+            source = found
+        } else {
+            guard let found = store.defaultCalendarForNewEvents?.source else { try fail("No default calendar account") }
+            source = found
+        }
+        let existing = store.calendars(for: .event).filter { $0.title == title && $0.source.sourceIdentifier == source.sourceIdentifier }
+        guard existing.count <= 1 else { try fail("Ambiguous existing calendar") }
+        if let found = existing.first { return ["ok": true, "reused": true, "item": listValue(found)] }
+        let calendar = EKCalendar(for: .event, eventStore: store)
+        calendar.title = title; calendar.source = source
+        try store.saveCalendar(calendar, commit: true)
+        return ["ok": true, "item": listValue(calendar)]
     case "create_reminder":
         try require(.reminder)
         let list = try writableList(store, text(request, "list_id"), .reminder)

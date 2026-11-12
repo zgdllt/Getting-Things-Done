@@ -233,6 +233,8 @@ main { padding: 30px 40px 60px; min-width: 0; outline: none; }
 .switch input { accent-color: var(--green); }
 
 /* replies the agent understood: one-tap proposals, notes, and dates the user set */
+.owned { padding: 0 6px; border-radius: 999px; background: var(--green); color: #f7f3e6; font-size: 10.5px; }
+.proposal .local-only { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .mine { padding: 0 6px; border-radius: 999px; background: var(--green-wash); color: var(--green); font-size: 10.5px; }
 .proposal { margin: 8px 0 0; padding: 7px 9px; border: 1px dashed rgba(35, 79, 65, .45); border-radius: 8px; background: #f3f6ee; }
 .proposal p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--ink); }

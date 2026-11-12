@@ -382,3 +382,22 @@ follow-up review approved the changes. AST checks confirmed new-file syntax,
 annotations, docstrings, standard-library imports and line limits; `git diff --check`
 passed. No real model/network calls, Apple writes, live personal-state writes,
 notification deliveries, service starts or commits were performed.
+
+## 文枢's own calendar and reminder list (2026-11-12)
+
+- EventKit cannot create an account, so "own account" is a calendar and a reminder list both titled
+  「文枢」 on the default event/reminder source (`create_calendar` mirrors `create_list`: same-title
+  reuse on that source, ambiguous → fail). Ids live in config as `owned_calendar_id` / `owned_list_id`;
+  `gtd.py setup-owned` and `POST /api/settings/owned-calendar` are idempotent (ids that still resolve
+  in the snapshot are kept; a deleted one is recreated).
+- `gtd_owned.require_owned` runs before every direct native write and rejects any target outside the
+  owned ids. Direct writes still go through `gtd.apply_plan` (op_id idempotence, `modified_at` checks,
+  uncertain writes stop).
+- Accepting a reschedule on an owned event moves the real event, keeping local time of day and
+  duration (snapshot times are UTC; the local date is replaced). Events in the user's calendars keep the
+  board-only override, and the UI now says 「只改文枢里的日期，日历不动」. Reminder cards keep the existing
+  guarded reminder path.
+- A confirmed new task **with a date** becomes a reminder in the owned list (it syncs and rings, which an
+  inbox candidate does not); without a date, or before setup, it stays an inbox candidate.
+- Cards whose item (or a merged identity) lives in the owned calendar/list carry `owned: true` → 「文枢的」.
+- Verified: 253 unit tests (8 new in `test_owned.py`), `swiftc -typecheck`, the three browser regressions.

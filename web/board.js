@@ -71,12 +71,14 @@
   const itemById = (id) => state.board?.items.find((i) => i.id === id);
 
   // A reply the agent understood as a date change or a new task waits here for one tap.
-  function proposalStrip(p) {
+  function proposalStrip(p, item) {
+    // Only items in 文枢's own calendar/list (or reminders, via the guarded path) really move.
+    const local = p.kind !== "new_task" && item && item.kind !== "reminder" && !item.owned;
     const busy = state.proposalBusy.has(p.id) ? " disabled" : "";
     const error = state.proposalError[p.id];
     const ask = p.kind === "new_task"
       ? `新建「${esc(short(p.title, 18))}」${p.due ? ` · ${dayLabel(p.due)}` : ""}？`
-      : `你说「${esc(short(p.text, 14))}」→ 截止改到 ${dayLabel(p.due)}？`;
+      : `你说「${esc(short(p.text, 14))}」→ 截止改到 ${dayLabel(p.due)}？${local ? '<small class="local-only">只改文枢里的日期，日历不动</small>' : ""}`;
     const yes = p.kind === "new_task" ? "加入" : "好";
     return `<div class="proposal" role="group" aria-label="待确认的提议：${esc(p.summary)}"><p>${ask}</p><div class="proposal-actions">` +
       `<button type="button" class="yes" data-proposal="${esc(p.id)}" data-accept="1"${busy}>${yes}</button>` +
@@ -105,8 +107,8 @@
     const children = !kids.length ? "" : `<button type="button" class="children-toggle" data-children="${esc(item.id)}" aria-expanded="${open}">${open ? "收起" : "展开"} ${kids.length} 件子任务</button>` +
       (open ? `<ul class="children">${kids.map((k) => `<li><span title="${esc(k.title)}">${esc(k.title)}</span><button type="button" data-done="${esc(k.id)}" aria-label="已完成：${esc(k.title)}" title="已完成">✓</button><button type="button" data-menu="${esc(k.id)}" aria-haspopup="menu" aria-label="更多操作：${esc(k.title)}">⋯</button></li>`).join("")}</ul>` : "");
     return `<article class="card${state.fresh === item.id ? " fresh" : ""}" draggable="true" data-id="${esc(item.id)}">
-      <div class="card-top"><span class="kind">${KIND[item.kind] || ""}</span><span class="status ${esc(item.status)}">${STATUS[item.status] || esc(item.status)}</span>${item.due ? `<span class="due${urgent ? " urgent" : ""}">${esc(relDue(item.due))}</span>` : ""}${item.due && item.due_source === "user" ? '<span class="mine" title="这个截止日是你在回复里定的">你定的</span>' : ""}${item.pinned ? '<span class="pin" title="你校准过它的位置">◆</span>' : ""}<button type="button" class="more" data-menu="${esc(item.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作：${esc(item.title)}">⋯</button></div>
-      <h3>${esc(item.title)}</h3>${reasons.length ? `<p class="why">${reasons.map(esc).join(" · ")}</p>` : ""}${left || rest ? `<p class="left-off">${left}${left && rest ? "<br>" : ""}${rest}</p>` : ""}${(item.proposals || []).map(proposalStrip).join("")}${notesBlock(item)}${children}</article>`;
+      <div class="card-top"><span class="kind">${KIND[item.kind] || ""}</span><span class="status ${esc(item.status)}">${STATUS[item.status] || esc(item.status)}</span>${item.due ? `<span class="due${urgent ? " urgent" : ""}">${esc(relDue(item.due))}</span>` : ""}${item.due && item.due_source === "user" ? '<span class="mine" title="这个截止日是你在回复里定的">你定的</span>' : ""}${item.owned ? '<span class="owned" title="在文枢自己的日历或提醒列表里，文枢可以直接改">文枢的</span>' : ""}${item.pinned ? '<span class="pin" title="你校准过它的位置">◆</span>' : ""}<button type="button" class="more" data-menu="${esc(item.id)}" aria-haspopup="menu" aria-expanded="false" aria-label="更多操作：${esc(item.title)}">⋯</button></div>
+      <h3>${esc(item.title)}</h3>${reasons.length ? `<p class="why">${reasons.map(esc).join(" · ")}</p>` : ""}${left || rest ? `<p class="left-off">${left}${left && rest ? "<br>" : ""}${rest}</p>` : ""}${(item.proposals || []).map((p) => proposalStrip(p, item)).join("")}${notesBlock(item)}${children}</article>`;
   }
 
   function quadrant(q, items, byId) {
@@ -189,8 +191,15 @@
       <button type="button" class="ghost" data-notify-save>保存</button><button type="button" class="primary" data-notify-test>发一条测试通知</button></div>${test}
       <h3>最近发出的</h3><ol class="log">${recent}</ol></section>`;
   }
+  function ownedSection() {
+    const o = state.owned;
+    if (!o) return "";
+    const line = o.ready ? '<p class="ok">文枢日历：已创建。日历和提醒事项里各有一个「文枢」，文枢只直接改这两个；你自己的日历仍要你点头。</p>'
+      : '<p class="hint">文枢日历：还没创建。创建后，文枢会在你的默认账户里建一个「文枢」日历和一个「文枢」提醒列表，只在这两个里直接安排事情。</p>';
+    return `<section class="panel owned-cal"><h2>文枢日历</h2>${line}${o.ready ? "" : '<button type="button" class="primary" data-owned-setup>创建</button>'}</section>`;
+  }
   function settingsView() {
-    return `<div class="settings"><header class="page-head"><h1>设置</h1><p>通知怎么打扰你，以及 agent 用哪个模型。</p></header>${notifySection()}<div id="dialog-content">${state.providers ? window.GTDProviders.section(state.providers) : "<p>正在读取…</p>"}</div><p class="hint">Finder 标签、Codex 模型等其他设置在 <a href="/classic">经典工作台</a>。</p></div>`;
+    return `<div class="settings"><header class="page-head"><h1>设置</h1><p>通知怎么打扰你，以及 agent 用哪个模型。</p></header>${notifySection()}${ownedSection()}<div id="dialog-content">${state.providers ? window.GTDProviders.section(state.providers) : "<p>正在读取…</p>"}</div><p class="hint">Finder 标签、Codex 模型等其他设置在 <a href="/classic">经典工作台</a>。</p></div>`;
   }
 
   function freshness() {
@@ -218,7 +227,7 @@
     try {
       if (view === "board") await loadBoard();
       if (view === "memory") { state.memory = await api("/api/memory"); render(); }
-      if (view === "settings") { [state.providers, state.notify] = await Promise.all([window.GTDProviders.load(), api("/api/notify")]); render(); }
+      if (view === "settings") { [state.providers, state.notify, state.owned] = await Promise.all([window.GTDProviders.load(), api("/api/notify"), api("/api/settings/owned-calendar").catch(() => null)]); render(); }
     } catch (error) { toast(error.message, { error: true }); }
   }
 
@@ -243,7 +252,9 @@
       const result = await api("/api/board/proposal", { id, accept });
       state.board = result; state.lastLoad = Date.now();
       if (owner) state.fresh = owner.id;
-      const done = !accept ? "好，不改" : p?.kind === "new_task" ? `已新建「${short(p.title, 14)}」` : `截止已改到 ${p ? dayLabel(p.due).replace(/<[^>]+>/g, "") : "新日期"}`;
+      const day = p ? dayLabel(p.due).replace(/<[^>]+>/g, "") : "新日期";
+      const done = !accept ? "好，不改" : p?.kind === "new_task" ? `已新建「${short(p.title, 14)}」${result.applied_to === "owned_list" ? "，放进了「文枢」提醒列表" : ""}`
+        : result.applied_to === "owned_calendar" ? `日程已改到 ${day}` : result.applied_to === "board_only" ? `看板里改到 ${day}（日历没动）` : `截止已改到 ${day}`;
       toast(result.refresh_pending ? done + "，提醒事项稍后同步" : done);
     } catch (error) {
       state.proposalError[id] = error.message;
@@ -313,6 +324,12 @@
     if (t.hasAttribute("data-save-project")) return saveProject(t.closest("tr"));
     if (t.hasAttribute("data-notify-save")) {
       try { state.notify = await api("/api/notify/settings", { enabled: $("#notify-enabled").checked, quiet_start: $("#quiet-start").value, quiet_end: $("#quiet-end").value }); render(); toast("通知设置已保存"); } catch (error) { toast(error.message, { error: true }); }
+      return;
+    }
+    if (t.hasAttribute("data-owned-setup")) {
+      t.disabled = true;
+      try { state.owned = await api("/api/settings/owned-calendar", {}); render(); toast("已创建「文枢」日历和提醒列表"); }
+      catch (error) { t.disabled = false; toast(error.message, { error: true }); }
       return;
     }
     if (t.hasAttribute("data-notify-test")) {
