@@ -5,6 +5,7 @@ window.GTDFileLibrary = (() => {
   const labels = {important_urgent:"重要且紧急", important:"重要不紧急", urgent:"紧急但较不重要", later:"可暂缓", done:"已完成", undecided:"待判断"};
   let data = null, client = null, error = "", filter = "suggested", tagFilter = "", selected = new Set();
   let loading = false, plan = null, busy = false, generation = 0, committing = false, page = 0, searchTimer = null;
+  let historyOpen = false;  // survives the 5-second refresh, which rebuilds the whole view
   const size = bytes => bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + " MB" : (bytes / 1024).toFixed(1) + " KB";
   const chip = (name, color) => `<span class="file-tag file-tag-${colors[color] || "none"}"><i aria-hidden="true"></i>${escape(name)}</span>`;
   const tagColor = name => data?.tags.find(tag => tag.name === name)?.color || 0;
@@ -80,7 +81,7 @@ window.GTDFileLibrary = (() => {
       <div class="file-pages"><span>共 ${data.total} 项 · 第 ${data.page+1} / ${Math.max(1,Math.ceil(data.total/data.limit))} 页 · 每页最多 ${data.limit} 项</span><div class="actions">
       <button class="button small" data-files-action="previous" ${!page?"disabled":""}>上一页</button><button class="button small" data-files-action="next" ${(page+1)*data.limit>=data.total?"disabled":""}>下一页</button></div></div>
       <div class="inbox-footer"><p>已有标签保留。先核对建议，预览后再应用。</p><div class="actions"><button class="button subtle" data-files-action="select">选中本页可应用建议</button><button class="button primary" data-files-action="prepare" ${!selected.size || busy ? "disabled" : ""}>预览 ${selected.size} 项 →</button></div></div>`}
-      ${data.operations.length ? `<details class="file-history"><summary>最近标签操作 · ${data.operations.length}</summary>${data.operations.map(op =>
+      ${data.operations.length ? `<details class="file-history"${historyOpen ? " open" : ""}><summary>最近标签操作 · ${data.operations.length}</summary>${data.operations.map(op =>
         `<div><span>${escape(new Date(op.created_at).toLocaleString())} · ${op.success_count} 项已添加
         ${op.results.filter(item=>!item.ok).map(item=>`<small>${escape(item.path)} · ${escape(item.error)}</small>`).join("")}
         ${op.undo_results?.filter(item=>!item.ok).map(item=>`<small>${escape(item.error)}</small>`).join("")}</span>
@@ -220,11 +221,13 @@ window.GTDFileLibrary = (() => {
     catch(failure){client.toast(failure.message,true);}
   });
   setInterval(()=>{
-    if(client?.visible()&&!busy&&!loading&&!document.hidden&&!document.querySelector("#confirm-dialog").open&&
+    // Pause while the operation history is open, so its undo buttons are not replaced under the pointer.
+    if(client?.visible()&&!busy&&!loading&&!historyOpen&&!document.hidden&&!document.querySelector("#confirm-dialog").open&&
        !document.activeElement.matches("input,textarea,select")){
       loading=true;load().finally(()=>loading=false);
     }
   },5000);
+  document.addEventListener("toggle",event=>{if(event.target.matches?.(".file-history"))historyOpen=event.target.open;},true);
   document.querySelector("#confirm-dialog")?.addEventListener("cancel",event=>{if(committing)event.preventDefault();});
   return {init(value){client=value;},enter,render,isCommitting:()=>committing};
 })();
