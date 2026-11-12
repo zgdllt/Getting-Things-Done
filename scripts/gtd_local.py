@@ -35,7 +35,7 @@ SECRET_PATTERNS = [
     re.compile(r"\b(?:ghp|gho|ghs|github_pat)_[A-Za-z0-9_]{20,}"),                  # GitHub tokens
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),                                            # AWS key id
     re.compile(r"(?i)(bearer\s+)[A-Za-z0-9._~+/=-]{20,}"),                           # bearer tokens
-    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----"),
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE[ ]KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE[ ]KEY-----"),
 ]
 INJECTED = re.compile(r"<(system-reminder|ide_selection|ide_opened_file|command-[a-z-]+|local-command-[a-z-]+|subagent_notification|task-notification)>"
                       r"[\s\S]*?</\1>")
