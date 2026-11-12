@@ -54,7 +54,7 @@ class CodexTest(unittest.TestCase):
                     payload["phase"] = phase
                 return {"timestamp": iso(minute), "type": "response_item", "payload": payload}
             write_jsonl(Path(root) / "2026/11/04/rollout.jsonl", [
-                {"timestamp": iso(0), "type": "session_meta", "payload": {"cwd": "/Users/x/workspace/robocup"}},
+                {"timestamp": iso(0), "type": "session_meta", "payload": {"cwd": "/home/x/workspace/robocup"}},
                 message(1, "user", "<environment_context>cwd</environment_context>"),
                 message(2, "user", "修一下射门的时序"),
                 message(3, "assistant", "我先看看", "commentary", "output_text"),
