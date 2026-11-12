@@ -38,10 +38,18 @@ def load(path: Path) -> Dict[str, str]:
 
 def chat_json(provider: Dict[str, str], system: str, user: str, timeout: float = 600,
               retries: int = 2, temperature: float = 0.2) -> Dict[str, Any]:
-    """One JSON-object completion; retries transient failures with backoff."""
+    """One JSON-object completion; retries transient failures with backoff.
+
+    Instructions lead the user message by default: some gateways (seen on pinaic.com,
+    2026-11-12) silently drop the system role. Set ``"system_role": true`` in the provider
+    file to send them as a separate system message instead.
+    """
+    if provider.get("system_role") is True:
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    else:
+        messages = [{"role": "user", "content": system + "\n\n---\n\n" + user}]
     body = {"model": provider["model"], "temperature": temperature,
-            "response_format": {"type": "json_object"},
-            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+            "response_format": {"type": "json_object"}, "messages": messages}
     extra = provider.get("extra_body") or {}
     if not isinstance(extra, dict) or {"model", "messages"} & set(extra):
         raise ProviderError("extra_body must be an object and cannot replace model or messages")
@@ -70,7 +78,8 @@ def chat_json(provider: Dict[str, str], system: str, user: str, timeout: float =
                 break
         except (urllib.error.URLError, OSError, ValueError, KeyError, IndexError) as error:
             last = f"{type(error).__name__}: {str(error)[:200]}"
-        time.sleep(5 * (attempt + 1))
+        if attempt < retries:
+            time.sleep(5 * (attempt + 1))
     raise ProviderError(last or "provider failed")
 
 

@@ -119,7 +119,26 @@ class ProviderTest(unittest.TestCase):
             gtd_provider.chat_json(provider, "s", "u")
         sent = json.loads(call.call_args.args[0].data)
         self.assertEqual((sent["max_tokens"], sent["chat_template_kwargs"]), (8000, {"enable_thinking": False}))
-        self.assertEqual((sent["model"], len(sent["messages"])), ("m", 2))
+        self.assertEqual((sent["model"], len(sent["messages"])), ("m", 1))
+
+    def test_instructions_lead_the_user_message_unless_system_role(self):
+        """Gateways that drop the system role still receive the instructions."""
+        base = {"base_url": "https://example.invalid/v1", "api_key": "k", "model": "m"}
+        for provider, expected in ((base, [("user", "s\n\n---\n\nu")]),
+                                   ({**base, "system_role": True}, [("system", "s"), ("user", "u")])):
+            body = {"choices": [{"message": {"content": "{}"}}]}
+            with patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(body).encode())) as call:
+                gtd_provider.chat_json(provider, "s", "u")
+            sent = json.loads(call.call_args.args[0].data)["messages"]
+            self.assertEqual([(m["role"], m["content"]) for m in sent], expected)
+
+    def test_no_backoff_after_the_last_attempt(self):
+        """A single-attempt call fails immediately instead of sleeping first."""
+        with patch("urllib.request.urlopen", side_effect=OSError("down")), patch("time.sleep") as nap:
+            with self.assertRaises(gtd_provider.ProviderError):
+                gtd_provider.chat_json({"base_url": "https://example.invalid/v1", "api_key": "k", "model": "m"},
+                                       "s", "u", retries=0)
+        nap.assert_not_called()
 
     def test_extra_body_cannot_replace_messages(self):
         provider = {"base_url": "https://example.invalid/v1", "api_key": "k", "model": "m",
